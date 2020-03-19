@@ -31,7 +31,7 @@ include(Arduino/System/PlatformIndex)
 # This function also generates a file BoardOptions.cmake, which can be used
 # to select an arduino board to setup the toolchain for and set other menu
 # options for the board (Use the cache variable ARDUINO_BOARD_OPTIONS_FILE
-# to pass the generated/edited or any other pre-drafter board options file).
+# to pass the generated/edited or any other pre-drafted board options file).
 # If no board is selected (e.g. first time without any board selected), CMake
 # will exit with error. If a board is already selected i.e. if the variable
 # ARDUINO_BOARD is set to one of the indexed boards, then the variables
