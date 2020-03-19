@@ -79,11 +79,11 @@ Like Arduino IDE, if the required Arduino libraries are to be automatically iden
 
 ```cmake
 add_executable(my_app my_app.c) # my_app.c includes Wire.h, Arduino.h
-# Link Wire and core automatically (PRIVATE linking in this example)
-target_link_arduino_libraries(my_app AUTO_PRIVATE)
+# Link Wire and core automatically (PUBLIC linking in this example)
+target_link_arduino_libraries(my_app AUTO_PUBLIC)
 ```
 
-These examples illustrates simple usage, but powerful enough for most use cases. However more advanced control and customization of Arduino libraries should be possible. Please refer to the Examples folder, as well as the API documentation of `target_link_arduino_libraries` (Currently documented as comments in BoardBuildTargets.cmake).
+These examples illustrates simple usage, but powerful enough for most use cases. However more advanced control and customization of Arduino libraries should be possible. Please refer to the Examples folder, as well as the API documentation of `target_link_arduino_libraries` (Currently documented as comments in [BoardBuildTargets.cmake](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/blob/master/Arduino/System/BoardBuildTargets.cmake)).
 
 ### Uploading to the target board (`target_enable_arduino_upload`)
 
