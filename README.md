@@ -67,12 +67,23 @@ target_link_arduino_libraries(my_library PRIVATE core)
 If any other native or 3rd party libraries are used, then those libraries must be linked similarly as follows.
 
 ```cmake
-add_executable(my_app my_app.c) # my_app.c includes Wire.h
+add_executable(my_app my_app.c) # my_app.c includes Wire.h, Arduino.h
 target_link_arduino_libraries(my_app PRIVATE Wire core)
 ```
 
 Note:
 1. *Wire* and *core* in the example are not CMake targets. They are just library names (case-sensitive).
+1. It is required only to specify the direct dependencies. Any deeper dependencies are automatically identified and linked. For example, if *SD.h* is included, it is sufficient to link with *SD*, even if *SD* depends on other Arduino libraries, like *SPI*.
+
+Like Arduino IDE, if the required Arduino libraries are to be automatically identified and linked, then it can be done as follows.
+
+```cmake
+add_executable(my_app my_app.c) # my_app.c includes Wire.h, Arduino.h
+# Link Wire and core automatically (PUBLIC linking in this example)
+target_link_arduino_libraries(my_app AUTO_PUBLIC)
+```
+
+These examples illustrates simple usage, but powerful enough for most use cases. However more advanced control and customization of Arduino libraries should be possible. Please refer to the Examples folder, as well as the API documentation of `target_link_arduino_libraries` (Currently documented as comments in [BoardBuildTargets.cmake](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/blob/master/Arduino/System/BoardBuildTargets.cmake)).
 
 ### Uploading to the target board (`target_enable_arduino_upload`)
 
@@ -107,6 +118,10 @@ Using the programmer, bootloader can be flashed as below
 ```sh
 <make-command> burn-bootloader CONFIRM=1
 ```
+
+## Serial port monitoring
+
+Currently there is no support available for this within this toolchain. However any external serial port monitor can be used (e.g. Putty). External serial monitor may need to be closed before upload and reopened after upload, because both use the same serial port.
 
 ## How it works
 

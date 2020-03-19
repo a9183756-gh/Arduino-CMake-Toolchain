@@ -15,7 +15,7 @@ include(Arduino/Utilities/JSONParser)
 include(Arduino/System/PackagePathIndex)
 
 #==============================================================================
-# Parse the JSON files contained in the standard Ardiono paths to index all
+# Parse the JSON files contained in the standard Arduino paths to index all
 # available platforms. Not all the platforms contained in the JSON files are
 # installed. The installed platforms are identified and stored in the given
 # 'namespace'. 
