@@ -1,0 +1,26 @@
+# Copyright (c) 2020 Arduino CMake Toolchain
+
+if (CONFIRM_RECIPE_PATTERN AND NOT DEFINED ENV{CONFIRM})
+	if (NOT MAKE_PROGRAM)
+		set(MAKE_PROGRAM "<make>")
+	endif()
+
+	message(FATAL_ERROR "Need to confirm ${OPERATION} operation as below\n"
+		"Usage: '${MAKE_PROGRAM} CONFIRM=1 ${OPERATION}'")
+endif()
+
+if (CONFIRM_RECIPE_PATTERN)
+	set(RECIPE_PATTERN "${CONFIRM_RECIPE_PATTERN}")
+endif()
+
+message("Execute: \"${RECIPE_PATTERN}\"")
+separate_arguments(cmd_pattern UNIX_COMMAND "${RECIPE_PATTERN}")
+message("Execute: \"${cmd_pattern}\"")
+execute_process(COMMAND ${cmd_pattern} OUTPUT_VARIABLE output ERROR_VARIABLE output RESULT_VARIABLE result)
+message("Result: \"${result}\"")
+if (NOT "${result}" EQUAL 0)
+	message(SEND_ERROR ${output})
+else()
+	message(STATUS ${output})
+endif()
+
