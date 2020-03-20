@@ -77,8 +77,8 @@ define_property(TARGET
 # When using automatic detection, in some unlikely cases there may be 
 # false positives (e.g. Arduino libraries under a not-defined preprocessor
 # flag), which can be ignored using the IGNORE list. Also if there are any
-# false negatives (due to obfuscated code?), those needs to be explicitly
-# linked.
+# false negatives (due to not including the correct library header or due
+# to obfuscated code?), those needs to be explicitly linked.
 #
 # e.g.
 #     # Ignore certain automatically detected false positives
@@ -102,7 +102,7 @@ define_property(TARGET
 # e.g.
 #     # See also add_custom_arduino_library to understand the below example
 #     find_arduino_library(Wire lib_path)
-#     add_custom_arduino_library(my_arduino_wire "${lib_path}")
+#     add_custom_arduino_library(my_arduino_wire Wire "${lib_path}")
 #     target_link_libraries(my_app PRIVATE my_arduino_wire)
 #     # Assuming that my_app sources use some Arduino library 'X' which
 #     # in turn uses 'Wire', then the below OVERRIDE ensures that the 

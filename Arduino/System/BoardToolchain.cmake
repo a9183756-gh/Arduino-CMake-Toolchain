@@ -461,12 +461,12 @@ function(_resolve_tool_properties tool tool_string return_string)
 		properties_set_value(ard_local "${_local_prop}" "${_value}")
 	endforeach()
 
-	# Transfer verbose properties
-	if (CMAKE_VERBOSE_MAKEFILE)
+	# Transfer verbose properties, no quiet mode for now
+	#if (CMAKE_VERBOSE_MAKEFILE)
 		set(_suffix "verbose")
-	else()
-		set(_suffix "quiet")
-	endif()
+	#else()
+	#	set(_suffix "quiet")
+	#endif()
 
 	properties_get_list(ard_local "^[^.]+\\.params\\.${_suffix}$"
 		_action_property_list)
