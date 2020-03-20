@@ -105,5 +105,3 @@ function(InitializeArduinoPackagePathList)
 	# message("ARDUINO_SKETCHBOOK_PATH:${ARDUINO_SKETCHBOOK_PATH}")
 
 endfunction()
-
-InitializeArduinoPackagePathList()

@@ -62,6 +62,9 @@ include(Arduino/System/BoardBuildTargets)
 # board's toolchain info is configured to a generated file that gets
 # included in every other inclusion of this toolchain.
 if (NOT _BOARD_INDEXING_COMPLETED)
+	get_property(_in_try_compile GLOBAL PROPERTY IN_TRY_COMPILE)
+	# IN_TRY_COMPILE check seems to be not enough. Check for parent
+	# script works, but may be undocumented!
 	get_filename_component(parent_script "${_ARDUINO_TOOLCHAIN_PARENT}"
 		NAME_WE)
 	if (parent_script STREQUAL "CMakeSystem")
