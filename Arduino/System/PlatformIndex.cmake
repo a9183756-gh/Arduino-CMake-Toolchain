@@ -32,6 +32,8 @@ function(IndexArduinoPlatforms namespace)
 	set(json_count 0)
 	set("${namespace}/list")
 
+	InitializeArduinoPackagePathList()
+
 	if (EXISTS "${ARDUINO_INSTALL_PATH}/hardware/package_index_bundled.json")
 		# message(STATUS "Parsing package ${ARDUINO_INSTALL_PATH}/hardware/package_index_bundled.json")
 		file(READ "${ARDUINO_INSTALL_PATH}/hardware/package_index_bundled.json" json_content)
