@@ -4,13 +4,13 @@
 
 ## Project Roots
 
-[Arduino-CMake-NG](https://github.com/arduino-cmake/Arduino-CMake-NG) is a great project, which could have prevented me from writing yet another Arduino CMake toolchain. However, as claimed by the project, Arduino-CMake-NG could not be easily utilized/modified for other Arduino compatible boards other than AVR, like ESP32, due to the fact that it does not fully work the way Arduino IDE works and has lot of AVR specific stuff. An other important limitation is that Arduino-CMake-NG provides Arduino specific CMake interface, requiring CMake scripts to be written/modified specifically for Arduino, rather than just passing `-D CMAKE_TOOLCHAIN_FILE=<arduino_cmake_ng_path>/cmake/Arduino-Toolchain.cmake` to a generic CMake project.
+[Arduino-CMake-NG](https://github.com/arduino-cmake/Arduino-CMake-NG) is a great project, which could have prevented me from writing yet another Arduino CMake toolchain. However, as claimed by the project, Arduino-CMake-NG could not be easily utilized/modified for other Arduino compatible boards other than AVR, like ESP32, due to the fact that it does not fully work the way Arduino IDE works and has lot of AVR specific stuff. An other important limitation is that Arduino-CMake-NG provides Arduino specific CMake interface, requiring CMake scripts to be written/modified specifically for Arduino, rather than just passing `-D CMAKE_TOOLCHAIN_FILE=<arduino_cmake_ng_path>/cmake/Arduino-toolchain.cmake` to a generic CMake project.
 
 My initial expectation was to contribute to Arduino-CMake-NG to fix the above limitations, but had to redo a lot of core logic making it very incompatible (including the usage). Also, the project Arduino-CMake-NG seems to be no longer maintained. I would like to acknowledge the authors who contributed directly/indirectly to Arduino-CMake-NG, and thus indirectly contributed to this project.
 
 ## Features
 
-- [x] CMake Arduino toolchain (passed to CMake using `-D CMAKE_TOOLCHAIN_FILE=<arduino_toolchain_path>/Arduino-Toolchain.cmake)`
+- [x] CMake Arduino toolchain (passed to CMake using `-D CMAKE_TOOLCHAIN_FILE=<arduino_toolchain_path>/Arduino-toolchain.cmake)`
     - [x] Support for all Arduino compatible platforms (such as **ESP32**, **pinoccio**, etc.)
     - [x] Generic CMake scripting interface without requiring Arduino specific functions
     - [x] Arduino IDE compatible build (e.g. use of build rules and flags in board.local.txt, pre/postbuild hooks etc.)
@@ -129,4 +129,4 @@ This toolchain follows the build process described in [Arduino Build Process](ht
 
 ## License
 
-MIT © 2020 [Arduino-CMake-Toolchain](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/blob/master/LICENSE.md)
+MIT Â© 2020 [Arduino-CMake-Toolchain](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/blob/master/LICENSE.md)
