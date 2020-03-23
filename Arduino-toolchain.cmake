@@ -4,8 +4,7 @@
 # A toolchain for the Arduino compatile boards.
 # Please refer to README.md for the usage.
 
-#*****************************************************************************
-# If not using the required CMake version, exit with error
+# If the version of CMake used is below 3.7.0, exit with error.
 #
 # Intended to support CMake version 3.0.0, but there are limitations which
 # requires a minimum CMake version of 3.7.0. However, wherever possible, the
@@ -33,6 +32,9 @@ endif()
 
 # Save the policy state. We will restore it at the end.
 cmake_policy(PUSH)
+
+# Set policy to above 3.0.0
+cmake_policy(VERSION 3.0.0)
 
 # Interpret if() arguments without quotes as variables/keywords
 if (NOT CMAKE_VERSION VERSION_LESS 3.1)

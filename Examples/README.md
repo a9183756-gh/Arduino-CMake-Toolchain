@@ -11,7 +11,7 @@ If there are errors related to CMake version, update CMake or download/build a l
 
 If there are errors (related to not finding Arduino IDE installation), please install the Arduino IDE and follow the instructions to guide the toolchain with the installation path.
 
-As we have not yet chosen an Arduino board yet, the above *cmake* command exists with error, prompting to select a board from the generated BoardOptions.txt in *Examples_build* folder. Edit the file to choose the board and then reinvoke the command.
+As we have not yet chosen an Arduino board yet, the above *cmake* command exits with error, prompting to select a board from the generated BoardOptions.txt in *Examples_build* folder. Edit the file to choose the board and then reinvoke the command.
 
 ```sh
 cmake -D CMAKE_TOOLCHAIN_FILE=../Arduino-toolchain.cmake ../Examples
