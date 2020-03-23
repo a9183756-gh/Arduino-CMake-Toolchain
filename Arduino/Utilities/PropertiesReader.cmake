@@ -13,6 +13,7 @@ set(_PROPERTIES_READER_INCLUDED TRUE)
 function(properties_read properties_file namespace)
 
 	file(STRINGS ${properties_file} _content)
+	# message("\n${_content}")
 	_properties_parse(_content "${namespace}")
 	set("${namespace}/list" "${${namespace}/list}" PARENT_SCOPE)
 endfunction()
@@ -89,11 +90,25 @@ endmacro()
 
 macro(_properties_parse content namespace)
 
+	set(_last_property)
 	foreach (_property IN LISTS "${content}")
 
 		string(REGEX MATCH "^([^#=]+)=([^#]*)" match "${_property}")
 		if (NOT match)
-			continue()
+			# May be part of last string (Because CMake omits binary and splits
+			# as list element
+			string(REGEX MATCH "^([^#]+)" match "${_property}")
+			if ("${match}" STREQUAL "")
+				continue()
+			endif()
+
+			string(STRIP "${CMAKE_MATCH_1}" _last_part)
+			set(_last_property "${_last_property}${_last_part}" )
+			string(REGEX MATCH "^([^#=]+)=([^#]*)" match "${_last_property}")
+			if (NOT match)
+				continue()
+			endif()
+			set(_property "${_last_property}" )
 		endif()
 
 		set(_property_name "${CMAKE_MATCH_1}")
@@ -103,6 +118,7 @@ macro(_properties_parse content namespace)
 		set("${namespace}.${_property_name}" "${_property_value}")
 		set("${namespace}.${_property_name}" "${_property_value}" PARENT_SCOPE)
 
+		set(_last_property "${_property}")
 	endforeach()
 
 endmacro()
