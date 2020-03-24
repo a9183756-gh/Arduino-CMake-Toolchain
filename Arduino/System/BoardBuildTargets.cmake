@@ -427,8 +427,11 @@ function(find_arduino_library lib return_lib_path)
 	if (NOT ARDUINO_LIB_${lib}_PATH)
 		_library_search_process("${lib}" search_paths parsed_args_PATH_SUFFIXES
 			"ARDUINO_LIB_${lib}_PATH")
-		set(ARDUINO_LIB_${lib}_PATH "${ARDUINO_LIB_${lib}_PATH}" CACHE STRING
-			"Path found containing the arduino library ${lib}" FORCE)
+		if (ARDUINO_LIB_${lib}_PATH OR NOT parsed_args_QUIET)
+			set(ARDUINO_LIB_${lib}_PATH "${ARDUINO_LIB_${lib}_PATH}"
+				CACHE STRING
+				"Path found containing the arduino library ${lib}" FORCE)
+		endif()
 		if (ARDUINO_LIB_${lib}_PATH)
 			message(STATUS "Found Arduino Library ${lib}: ${ARDUINO_LIB_${lib}_PATH}")
 		endif()
@@ -440,16 +443,6 @@ function(find_arduino_library lib return_lib_path)
 		if (NOT parsed_args_QUIET)
 			message(SEND_ERROR "Arduino library ${lib} could not be found in "
 					"${search_paths}")
-		endif()
-		set("${return_lib_path}" "${lib}-NOTFOUND" PARENT_SCOPE)
-		return()
-	endif()
-
-	# TODO Check if the library supports the board architecture
-	if (FALSE)
-		if (NOT parsed_args_QUIET)
-			message(SEND_ERROR "Arduino library found ${ARDUINO_LIB_${lib}_PATH} does not support "
-				"the architecture ${ARDUINO_BOARD_BUILD_ARCH}")
 		endif()
 		set("${return_lib_path}" "${lib}-NOTFOUND" PARENT_SCOPE)
 		return()

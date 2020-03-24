@@ -183,7 +183,7 @@ function(IndexArduinoBoards namespace)
 				string(TOUPPER "${_menu_identifier}" _menu_identifier)
 				set(ARDUINO.${_menu_identifier}.NAME "${_menu_name}")
 
-				set(_menu_var_name "Arduino(${_board_identifier}): ${_menu_name}")
+				set(_menu_var_name "Arduino(${_board_identifier})/${_menu_name}")
 
 				if (ARDUINO_${_menu_opt_identifier})
 					set("${_menu_var_name}" "${_menu_opt_name}" 
