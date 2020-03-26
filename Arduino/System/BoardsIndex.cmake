@@ -86,9 +86,9 @@ function(IndexArduinoBoards namespace)
 	set(boards_idx 0)
 	set("${namespace}/list")
 	set(_board_names_list)
-	foreach (pl IN LISTS _pl_list)
+	foreach (pl_id IN LISTS _pl_list)
 
-		platforms_get_property("ard_plat" "${pl}" "/path" pl_path)
+		platforms_get_property("ard_plat" "${pl_id}" "/path" pl_path)
 		math(EXPR boards_idx "${boards_idx} + 1")
 		properties_read("${pl_path}/boards.txt" "ard_boards.${boards_idx}")
 		properties_set_parent_scope("ard_boards.${boards_idx}")
@@ -105,8 +105,9 @@ function(IndexArduinoBoards namespace)
 		# Menu items in the platform
 		properties_get_list("ard_boards.${boards_idx}" "^menu\\.[^.]+$" _menu_prefix_list)
 
-		platforms_get_property("ard_plat" "${pl}" "name" _pl_name)
+		platforms_get_property("ard_plat" "${pl_id}" "name" _pl_name)
 		list(APPEND _board_names_list "**** ${_pl_name} ****")
+		platforms_get_property("ard_plat" "${pl_id}" "architecture" pl_arch)
 
 		_board_configure_file(APPEND
 			"${ARDUINO_TOOLCHAIN_DIR}/Arduino/Templates/BoardOptions_BoardHeader.cmake.in"
@@ -123,12 +124,12 @@ function(IndexArduinoBoards namespace)
 
 			# Find board prefix used in boards.txt and board name
 			set(_board_prefix "${CMAKE_MATCH_1}")
-			set(_board_identifier "${pl}.${CMAKE_MATCH_1}")
+			set(_board_identifier "${pl_arch}.${CMAKE_MATCH_1}")
 			list(APPEND _board_identifier_list "${_board_identifier}")
 			set("${namespace}.${_board_identifier}/prop_namespace" "ard_boards.${boards_idx}")
 			set("${namespace}.${_board_identifier}/prop_namespace" "ard_boards.${boards_idx}" PARENT_SCOPE)
-			set("${namespace}.${_board_identifier}/platform" "${pl}")
-			set("${namespace}.${_board_identifier}/platform" "${pl}" PARENT_SCOPE)
+			set("${namespace}.${_board_identifier}/pl_id" "${pl_id}")
+			set("${namespace}.${_board_identifier}/pl_id" "${pl_id}" PARENT_SCOPE)
 			properties_get_value("ard_boards.${boards_idx}" "${_board_prefix}.name" _board_name)
 			set(_board_name_in_menu "${_board_name} [${_board_identifier}]")
 			list(APPEND _board_names_list "${_board_name_in_menu}")
@@ -271,7 +272,7 @@ function(IndexArduinoBoards namespace)
 
 			# Find programmer prefix used in programmers.txt and name
 			set(_prog_prefix "${CMAKE_MATCH_1}")
-			set(_prog_id "${pl}.${CMAKE_MATCH_1}")
+			set(_prog_id "${pl_arch}.${CMAKE_MATCH_1}")
 			list(APPEND _prog_id_list "${_prog_id}")
 			set("${namespace}/prog.${_prog_id}.prop_namespace"
 				"ard_prog.${boards_idx}")
@@ -302,7 +303,7 @@ function(IndexArduinoBoards namespace)
 
 		# list(JOIN _board_identifier_list ", " _print_list)
 		# message(STATUS "Found boards: [${_print_list}]")
-		list(APPEND "${namespace}/list" "${_board_identifier_list}")
+		list(APPEND "${namespace}/list" ${_board_identifier_list})
 
 	endforeach()
 
@@ -469,11 +470,11 @@ function(boards_get_platform_property namespace board_identifier prop_name retur
 	if (NOT DEFINED "${namespace}/list")
 		message(FATAL_ERROR "Boards namespace ${namespace} not found!!!")
 	endif()
-	if (NOT DEFINED "${namespace}.${board_identifier}/platform")
+	if (NOT DEFINED "${namespace}.${board_identifier}/pl_id")
 		message(FATAL_ERROR "Board ${board_identifier} not found in ${namespace}!!!")
 	endif()
-	set(pl "${${namespace}.${board_identifier}/platform}")
-	platforms_get_property("ard_plat" "${pl}" "${prop_name}" _value)
+	set(pl_id "${${namespace}.${board_identifier}/pl_id}")
+	platforms_get_property("ard_plat" "${pl_id}" "${prop_name}" _value)
 	set("${return_value}" "${_value}" PARENT_SCOPE)
 endfunction()
 
