@@ -24,8 +24,8 @@ include(Arduino/System/PackagePathIndex)
 # the indexed (installed) arduino platforms (e.g. avr, esp8266 etc). The
 # returned list contains the identifier of each platform.
 #
-# The platform identifier can be used (in 'pl_prefix' argument) in a call
-# to 'platforms_get_property' to return the JSON property corresponding to
+# The platform identifier can be used (in 'pl_id' argument) in a call to
+# 'platforms_get_property' to return the JSON property corresponding to
 # the platform.
 function(IndexArduinoPlatforms namespace)
 
@@ -83,13 +83,13 @@ endfunction()
 #
 # Arguments:
 # <namespace> [IN]: The namespace passed to 'IndexArduinoPlatforms'
-# <pl_prefix> [IN]: platform identifier (one of the entries in the list
+# <pl_id> [IN]: platform identifier (one of the entries in the list
 # returned by 'platforms_get_list'
 # <prop_name> [IN]: JSON property name (rooted at the specified platform
 # entry within the JSON file)
 # <return_value> [OUT]: The value of the property is returned in this variable
 #
-function(platforms_get_property namespace pl_prefix prop_name return_value)
+function(platforms_get_property namespace pl_id prop_name return_value)
 	if (NOT DEFINED "${namespace}/list")
 		message(FATAL_ERROR "Platform namespace ${namespace} not found!!!")
 	endif()
@@ -97,16 +97,16 @@ function(platforms_get_property namespace pl_prefix prop_name return_value)
 	# If the property starts with '/' it implies a platform property and not JSON property
 	string(SUBSTRING "${prop_name}" 0 1 first_letter)
 	if ("${first_letter}" STREQUAL "/")
-		if (NOT DEFINED "${namespace}.${pl_prefix}${prop_name}")
-			message(FATAL_ERROR "Platform '${pl_prefix}' property '${prop_name}' not found in ${namespace}!!!")
+		if (NOT DEFINED "${namespace}.${pl_id}${prop_name}")
+			message(FATAL_ERROR "Platform '${pl_id}' property '${prop_name}' not found in ${namespace}!!!")
 		endif()
-		set("${return_value}" "${${namespace}.${pl_prefix}${prop_name}}" PARENT_SCOPE)
+		set("${return_value}" "${${namespace}.${pl_id}${prop_name}}" PARENT_SCOPE)
 	else()
-		if (NOT DEFINED "${namespace}.${pl_prefix}/json_namespace")
-			message(FATAL_ERROR "Platform ${pl_prefix} not found in ${namespace}!!!")
+		if (NOT DEFINED "${namespace}.${pl_id}/json_namespace")
+			message(FATAL_ERROR "Platform ${pl_id} not found in ${namespace}!!!")
 		endif()
-		set(json_namespace "${${namespace}.${pl_prefix}/json_namespace}")
-		set(json_prefix "${${namespace}.${pl_prefix}/json_prefix}")
+		set(json_namespace "${${namespace}.${pl_id}/json_namespace}")
+		set(json_prefix "${${namespace}.${pl_id}/json_prefix}")
 		json_get_value("${json_namespace}" "${json_prefix}.${prop_name}" _value)
 		set("${return_value}" "${_value}" PARENT_SCOPE)
 	endif()
@@ -146,13 +146,13 @@ macro(platforms_set_parent_scope namespace)
 	foreach(json_count RANGE 1 "${${namespace}/json_count}")
 		json_set_parent_scope("ard_pkg.${json_count}")
 	endforeach()
-	foreach(pl IN LISTS "${namespace}/list")
-		set("${namespace}.${pl}/json_namespace" "${${namespace}.${pl}/json_namespace}" PARENT_SCOPE)
-		set("${namespace}.${pl}/json_prefix" "${${namespace}.${pl}/json_prefix}" PARENT_SCOPE)
-		set("${namespace}.${pl}/path" "${${namespace}.${pl}/path}" PARENT_SCOPE)
-		set("${namespace}.${pl}/local_path" "${${namespace}.${pl}/local_path}" PARENT_SCOPE)
-		set("${namespace}.${pl}/hw_path" "${${namespace}.${pl}/hw_path}" PARENT_SCOPE)
-		set("${namespace}.${pl}/tool_path" "${${namespace}.${pl}/tool_path}" PARENT_SCOPE)
+	foreach(pl_id IN LISTS "${namespace}/list")
+		set("${namespace}.${pl_id}/json_namespace" "${${namespace}.${pl_id}/json_namespace}" PARENT_SCOPE)
+		set("${namespace}.${pl_id}/json_prefix" "${${namespace}.${pl_id}/json_prefix}" PARENT_SCOPE)
+		set("${namespace}.${pl_id}/path" "${${namespace}.${pl_id}/path}" PARENT_SCOPE)
+		set("${namespace}.${pl_id}/local_path" "${${namespace}.${pl_id}/local_path}" PARENT_SCOPE)
+		set("${namespace}.${pl_id}/hw_path" "${${namespace}.${pl_id}/hw_path}" PARENT_SCOPE)
+		set("${namespace}.${pl_id}/tool_path" "${${namespace}.${pl_id}/tool_path}" PARENT_SCOPE)
 	endforeach()
 	set("${namespace}/json_count" "${json_count}" PARENT_SCOPE)
 	set("${namespace}/list" "${${namespace}/list}" PARENT_SCOPE)
@@ -190,17 +190,17 @@ macro(_platforms_find_installed json_namespace pl_namespace is_bundled)
 		foreach (pl_idx RANGE 1 ${num_platforms})
 
 			set(pl "${pkg}.platforms.${pl_idx}")
-			json_get_value("${json_namespace}" "${pl}.architecture" pl_architecture)
+			json_get_value("${json_namespace}" "${pl}.architecture" pl_arch)
 			json_get_value("${json_namespace}" "${pl}.version" pl_version)
 			if ("${is_bundled}")
-				set(pl_path "${root_path}/${pkg_name}/${pl_architecture}")
-				set(local_path "${ARDUINO_SKETCHBOOK_PATH}/hardware/${pkg_name}/${pl_architecture}")
+				set(pl_path "${root_path}/${pkg_name}/${pl_arch}")
+				set(local_path "${ARDUINO_SKETCHBOOK_PATH}/hardware/${pkg_name}/${pl_arch}")
 				set(hw_path "${root_path}/${pkg_name}")
-				set(tool_path "${root_path}/tools/${pl_architecture}")
+				set(tool_path "${root_path}/tools/${pl_arch}")
 			else()
-				set(pl_path "${root_path}/${pkg_name}/hardware/${pl_architecture}/${pl_version}")
-				set(local_path "${ARDUINO_SKETCHBOOK_PATH}/hardware/${pkg_name}/${pl_architecture}")
-				set(hw_path "${root_path}/${pkg_name}/hardware/${pl_architecture}")
+				set(pl_path "${root_path}/${pkg_name}/hardware/${pl_arch}/${pl_version}")
+				set(local_path "${ARDUINO_SKETCHBOOK_PATH}/hardware/${pkg_name}/${pl_arch}")
+				set(hw_path "${root_path}/${pkg_name}/hardware/${pl_arch}")
 				set(tool_path "${root_path}/${pkg_name}/tools/{tool_name}/{tool_version}")
 			endif()
 
@@ -212,13 +212,15 @@ macro(_platforms_find_installed json_namespace pl_namespace is_bundled)
 
 			message(STATUS "Found Arduino Platform: ${pl_path}")
 
-			list(APPEND "${pl_namespace}/list" "${pl_architecture}")
-			set("${pl_namespace}.${pl_architecture}/json_namespace" "${json_namespace}" PARENT_SCOPE)
-			set("${pl_namespace}.${pl_architecture}/json_prefix" "${pl}"  PARENT_SCOPE)
-			set("${pl_namespace}.${pl_architecture}/path" "${pl_path}"  PARENT_SCOPE)
-			set("${pl_namespace}.${pl_architecture}/local_path" "${local_path}"  PARENT_SCOPE)
-			set("${pl_namespace}.${pl_architecture}/hw_path" "${hw_path}"  PARENT_SCOPE)
-			set("${pl_namespace}.${pl_architecture}/tool_path" "${tool_path}"  PARENT_SCOPE)
+			set(pl_id "${pkg_name}.${pl_arch}")
+			list(APPEND "${pl_namespace}/list" "${pl_id}")
+			set("${pl_namespace}.${pl_id}/json_namespace" "${json_namespace}" PARENT_SCOPE)
+			set("${pl_namespace}.${pl_id}/json_prefix" "${pl}"  PARENT_SCOPE)
+			set("${pl_namespace}.${pl_id}/json_pkg" "${pkg_name}"  PARENT_SCOPE)
+			set("${pl_namespace}.${pl_id}/path" "${pl_path}"  PARENT_SCOPE)
+			set("${pl_namespace}.${pl_id}/local_path" "${local_path}"  PARENT_SCOPE)
+			set("${pl_namespace}.${pl_id}/hw_path" "${hw_path}"  PARENT_SCOPE)
+			set("${pl_namespace}.${pl_id}/tool_path" "${tool_path}"  PARENT_SCOPE)
 
 		endforeach()
 	endforeach()
