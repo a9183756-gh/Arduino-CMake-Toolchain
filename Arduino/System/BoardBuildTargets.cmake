@@ -726,7 +726,11 @@ function(_add_internal_arduino_core target)
 
 	## Index the source files
 	find_source_files("${ARDUINO_BOARD_BUILD_CORE_PATH}" core_sources RECURSE)
-	find_source_files("${ARDUINO_BOARD_BUILD_VARIANT_PATH}" variant_sources RECURSE)
+	if (ARDUINO_BOARD_BUILD_VARIANT_PATH)
+		find_source_files("${ARDUINO_BOARD_BUILD_VARIANT_PATH}" variant_sources RECURSE)
+	else()
+		set(variant_sources)
+	endif()
 	# find_header_files("${ARDUINO_BOARD_BUILD_CORE_PATH}" core_headers)
 	# find_header_files("${ARDUINO_BOARD_BUILD_VARIANT_PATH}" variant_headers)
 

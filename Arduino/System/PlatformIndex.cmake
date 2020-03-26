@@ -107,7 +107,8 @@ function(platforms_get_property namespace pl_id prop_name return_value)
 		endif()
 		set(json_namespace "${${namespace}.${pl_id}/json_namespace}")
 		set(json_prefix "${${namespace}.${pl_id}/json_prefix}")
-		json_get_value("${json_namespace}" "${json_prefix}.${prop_name}" _value)
+		json_get_value("${json_namespace}" "${json_prefix}.${prop_name}" _value
+			${ARGN})
 		set("${return_value}" "${_value}" PARENT_SCOPE)
 	endif()
 endfunction()
@@ -175,6 +176,9 @@ macro(_platforms_find_installed json_namespace pl_namespace is_bundled)
 	endif()
 
 	json_get_value("${json_namespace}" "packages.N" num_packages)
+	if (num_packages EQUAL 0)
+		return()
+	endif()
 	foreach (pkg_idx RANGE 1 "${num_packages}")
 
 		set(pkg "packages.${pkg_idx}")
@@ -187,6 +191,9 @@ macro(_platforms_find_installed json_namespace pl_namespace is_bundled)
 		endif()
 
 		json_get_value("${json_namespace}" "${pkg}.platforms.N" num_platforms)
+		if (num_platforms EQUAL 0)
+			continue()
+		endif()
 		foreach (pl_idx RANGE 1 ${num_platforms})
 
 			set(pl "${pkg}.platforms.${pl_idx}")
@@ -201,7 +208,7 @@ macro(_platforms_find_installed json_namespace pl_namespace is_bundled)
 				set(pl_path "${root_path}/${pkg_name}/hardware/${pl_arch}/${pl_version}")
 				set(local_path "${ARDUINO_SKETCHBOOK_PATH}/hardware/${pkg_name}/${pl_arch}")
 				set(hw_path "${root_path}/${pkg_name}/hardware/${pl_arch}")
-				set(tool_path "${root_path}/${pkg_name}/tools/{tool_name}/{tool_version}")
+				set(tool_path "${root_path}/{tl_packager}/tools/{tool_name}/{tool_version}")
 			endif()
 
 			# Check if the platform of the specific version is installed

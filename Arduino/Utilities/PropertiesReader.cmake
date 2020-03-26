@@ -52,24 +52,29 @@ endfunction()
 
 function(properties_resolve_value value return_value namespace)
 
-	set(_expanded_list)
+	set(_expanded_prop_list)
 	_properties_expand_value("${value}" _result_value "${namespace}"
-			_expanded_list)
+			_expanded_prop_list)
 	set("${return_value}" "${_result_value}" PARENT_SCOPE)
+	foreach(_prop IN LISTS _expanded_prop_list)
+		set("${namespace}.${_prop}" "${${namespace}.${_prop}}" PARENT_SCOPE)
+	endforeach()
 
 endfunction()
 
 function(properties_resolve_all_values namespace)
 	set(_prop_list "${${namespace}/list}")
-	set(_expanded_list)
+	set(_expanded_prop_list)
 	foreach(_prop IN LISTS _prop_list)
-		list(APPEND _expanded_list ${_prop})
+		list(APPEND _expanded_prop_list ${_prop})
+		# message("Resolve *** ${_prop} *** : ${${namespace}.${_prop}}")
 		_properties_expand_value("${${namespace}.${_prop}}" _resolved_value "${namespace}"
-			_expanded_list)
-		# message("Resolve *** ${_prop} ***:${${namespace}.${_prop}}\n${_resolved_value}")
-		# message("Expanded: ${_expanded_list}")
+			_expanded_prop_list)
 		set("${namespace}.${_prop}" "${_resolved_value}")
-		set("${namespace}.${_prop}" "${_resolved_value}" PARENT_SCOPE)
+		# message("EXPANDED ${_prop}: ${${namespace}.${_prop}}")
+	endforeach()
+	foreach(_prop IN LISTS _expanded_prop_list)
+		set("${namespace}.${_prop}" "${${namespace}.${_prop}}" PARENT_SCOPE)
 	endforeach()
 endfunction()
 
@@ -124,7 +129,7 @@ macro(_properties_parse content namespace)
 endmacro()
 
 function(_properties_expand_value value return_value namespace
-		expanded_list)
+		expanded_prop_list)
 
 	set(_value "${value}")
 
@@ -151,13 +156,14 @@ function(_properties_expand_value value return_value namespace
 		ENDIF()
 		string(SUBSTRING "${val_suffix}" 0 ${var_end_pos} var_name)
 		if (DEFINED "${namespace}.${var_name}")
-			list(FIND "${expanded_list}" "${var_name}" _found_idx)
+			list(FIND "${expanded_prop_list}" "${var_name}" _found_idx)
 			if ("${_found_idx}" EQUAL -1)
-				list(APPEND "${expanded_list}" "${var_name}")
+				list(APPEND "${expanded_prop_list}" "${var_name}")
+				# message("=> Resolve *** ${var_name} *** : ${${namespace}.${var_name}}")
 				_properties_expand_value("${${namespace}.${var_name}}"
-					_var_value "${namespace}" expanded_list)
-				set("${expanded_list}" "${${expanded_list}}"
-					PARENT_SCOPE)
+					_var_value "${namespace}" "${expanded_prop_list}")
+				set("${namespace}.${var_name}" "${_var_value}")
+				# message("=> EXPANDED ${var_name}: ${_var_value}")
 				string_append(_result_value "${_var_value}")
 			else()
 				string_append(_result_value "${${namespace}.${var_name}}")
@@ -169,6 +175,10 @@ function(_properties_expand_value value return_value namespace
 		string(SUBSTRING "${val_suffix}" ${var_end_pos} -1 _value)
 	endwhile()
 
+	set("${expanded_prop_list}" "${${expanded_prop_list}}" PARENT_SCOPE)
+	foreach(_prop IN LISTS ${expanded_prop_list})
+		set("${namespace}.${_prop}" "${${namespace}.${_prop}}" PARENT_SCOPE)
+	endforeach()
 	set("${return_value}" "${_result_value}" PARENT_SCOPE)
 
 endfunction()

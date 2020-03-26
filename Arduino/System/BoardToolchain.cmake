@@ -11,7 +11,6 @@ if(_BOARD_TOOLCHAIN_INCLUDED)
 endif()
 set(_BOARD_TOOLCHAIN_INCLUDED TRUE)
 
-include(CMakeParseArguments)
 include(Arduino/Utilities/CommonUtils)
 include(Arduino/Utilities/PropertiesReader)
 include(Arduino/System/PackagePathIndex)
@@ -94,7 +93,7 @@ function (SetupBoardToolchain)
 	properties_set_value("ard_global" "ide_version" "${_version}")
 	
 	# Set build.core.path and ARDUINO_BOARD_BUILD_CORE_PATH
-	_board_get_property("build.core" _prop_value)
+	_board_get_property("build.core" _prop_value  DEFAULT "arduino")
 	set(ARDUINO_BOARD_BUILD_CORE_PATH
 		"${ARDUINO_BOARD_RUNTIME_PLATFORM_PATH}/cores/${_prop_value}")
 	properties_set_value("ard_global" "build.core.path"
@@ -102,9 +101,13 @@ function (SetupBoardToolchain)
 	string_escape_quoting(ARDUINO_BOARD_BUILD_CORE_PATH)
 	
 	# Set build.variant.path and ARDUINO_BOARD_BUILD_VARIANT_PATH
-	_board_get_property("build.variant" _prop_value)
-	set(ARDUINO_BOARD_BUILD_VARIANT_PATH
-		"${ARDUINO_BOARD_RUNTIME_PLATFORM_PATH}/variants/${_prop_value}")
+	_board_get_property("build.variant" _prop_value QUIET DEFAULT "")
+	if (_prop_value)
+		set(ARDUINO_BOARD_BUILD_VARIANT_PATH
+			"${ARDUINO_BOARD_RUNTIME_PLATFORM_PATH}/variants/${_prop_value}")
+	else()
+		set(ARDUINO_BOARD_BUILD_VARIANT_PATH)
+	endif()
 	properties_set_value("ard_global" "build.variant.path"
 		"${ARDUINO_BOARD_BUILD_VARIANT_PATH}")
 	string_escape_quoting(ARDUINO_BOARD_BUILD_VARIANT_PATH)
@@ -132,9 +135,13 @@ function (SetupBoardToolchain)
 				_tool_name)
 			_board_get_platform_property("toolsDependencies.${_tool_idx}.version"
 				_tool_version)
+			_board_get_platform_property("toolsDependencies.${_tool_idx}.packager"
+				_tool_packager)
 			string(REPLACE "{tool_name}" "${_tool_name}" _prop_value
 				"${_tool_path}")
 			string(REPLACE "{tool_version}" "${_tool_version}" _prop_value
+				"${_prop_value}")
+			string(REPLACE "{tl_packager}" "${_tool_packager}" _prop_value
 				"${_prop_value}")
 			properties_set_value("ard_global" "runtime.tools.${_tool_name}.path"
 				"${_prop_value}")
@@ -195,7 +202,7 @@ function (SetupBoardToolchain)
 	# (single executable). Some of the recipe patterns have these assumptions
 	# i.e. generated files from build patterns common to all executables (e.g.
 	# core prebuild pattern) could be referred by the executable-specific
-	# build patterns (e.g. link pattern). And thus the {build.path} in 
+	# build patterns (e.g. link pattern). And thus the {build.path} in
 	# executable-specific build patterns could mean different paths (either
 	# common library build path or executable build path). To arbitrate this,
 	# we use heuristics to identify the generated files in common build
@@ -263,7 +270,7 @@ function (SetupBoardToolchain)
 	# Resolve all the known variables so far. Remaining will be resolved later
 	properties_resolve_all_values(ard_global)
 	
-	#message("All properties in global")
+	# message("\n\nAll properties in global")
 	# properties_print_all(ard_global)
 
 	# Resolve command patterns and set it on parent scope
@@ -346,9 +353,12 @@ function (SetupBoardToolchain)
 	properties_get_value(ard_global "build.board" ARDUINO_BOARD)
 
 	# Tool names
-	properties_get_value(ard_global "upload.tool" ARDUINO_BOARD_UPLOAD_TOOL QUIET DEFAULT "")
-	properties_get_value(ard_global "program.tool" ARDUINO_BOARD_PROGRAM_TOOL QUIET DEFAULT "")
-	properties_get_value(ard_global "bootloader.tool" ARDUINO_BOARD_BOOTLOADER_TOOL QUIET DEFAULT "")
+	properties_get_value(ard_global "upload.tool" ARDUINO_BOARD_UPLOAD_TOOL
+		QUIET DEFAULT "")
+	properties_get_value(ard_global "program.tool" ARDUINO_BOARD_PROGRAM_TOOL
+		QUIET DEFAULT "")
+	properties_get_value(ard_global "bootloader.tool" ARDUINO_BOARD_BOOTLOADER_TOOL
+		QUIET DEFAULT "")
 
 	# Generate the cmake scripts for the size calculation and upload
 	_gen_arduino_size_script()
@@ -375,7 +385,7 @@ endfunction()
 #
 # Arguments:
 # <prop_name> [IN]: A property corresponding to the board in boards.txt file,
-# platform.txt file or other peroperties. The board prefix is omitted, when 
+# platform.txt file or other peroperties. The board prefix is omitted, when
 # passing the property name.
 # <return_value> [OUT]: The value of the property is returned in this variable
 #
@@ -395,7 +405,7 @@ endfunction()
 # Arguments:
 # <target> [IN]: The target for which the command line is returned. This name
 # is used in CMake generator expressions within the returned command line, so
-# that certain values like include directories are expanded later at the 
+# that certain values like include directories are expanded later at the
 # CMake generate time.
 # <cmd_name_regex_list> [IN]: List of regular expression corresponding to the
 # command hook names (see platform.txt in Arduino platform documentation).
@@ -432,21 +442,22 @@ endfunction()
 
 # Return property of the currently selected board
 function (_board_get_property prop return_value)
-	cmake_parse_arguments(parsed_args "" "" "" ${ARGN})
-	boards_get_property(ard_brd "${ARDUINO_BOARD_IDENTIFIER}" ${prop} _return_value
-		${parsed_args_UNPARSED_ARGUMENTS})
+	boards_get_property(ard_brd "${ARDUINO_BOARD_IDENTIFIER}"
+		${prop} _return_value ${ARGN})
 	set("${return_value}" "${_return_value}" PARENT_SCOPE)
 endfunction()
 
 # Return property of the platform of the currently selected board
 function (_board_get_platform_property prop return_value)
-	boards_get_platform_property(ard_brd "${ARDUINO_BOARD_IDENTIFIER}" ${prop} _return_value)
+	boards_get_platform_property(ard_brd 
+		"${ARDUINO_BOARD_IDENTIFIER}" ${prop} _return_value ${ARGN})
 	set("${return_value}" "${_return_value}" PARENT_SCOPE)
 endfunction()
 
 # Return property list of the currently selected board
 function (_board_get_property_list pattern return_list)
-	boards_get_property_list(ard_brd "${ARDUINO_BOARD_IDENTIFIER}" ${pattern} _return_list)
+	boards_get_property_list(ard_brd
+		"${ARDUINO_BOARD_IDENTIFIER}" ${pattern} _return_list)
 	set("${return_list}" "${_return_list}" PARENT_SCOPE)
 endfunction()
 
@@ -703,7 +714,12 @@ function (_find_system_program_path)
 
 			# Check if this command is in one of the find root paths, based on
 			# which set the system program path (suffixes used by find_program)
+			string(SUBSTRING "${_rule_cmd_path}" 0 1 _first_rule_char)
 			foreach(_root_path IN LISTS ARDUINO_FIND_ROOT_PATH)
+				string(SUBSTRING "${_root_path}" 0 1 _first_rp_char)
+				if(NOT _first_rule_char STREQUAL _first_rp_char)
+					continue()
+				endif()
 				file(RELATIVE_PATH _rel_path "${_root_path}" "${_rule_cmd_path}")
 				string(REGEX MATCH "^\\.\\.\\/" _match "${_rel_path}")
 				if (NOT _match)
