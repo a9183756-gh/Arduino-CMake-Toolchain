@@ -10,7 +10,6 @@ set(_BOARDS_INDEX_INCLUDED TRUE)
 # Indexing of arduino boards. For indexing arduino boards, arduino platforms
 # needs to be indexed using 'IndexArduinoPlatforms' (See PlatformIndex.cmake).
 
-include(CMakeParseArguments)
 include(Arduino/Utilities/CommonUtils)
 include(Arduino/Utilities/PropertiesReader)
 include(Arduino/System/PackagePathIndex)
@@ -125,6 +124,11 @@ function(IndexArduinoBoards namespace)
 			# Find board prefix used in boards.txt and board name
 			set(_board_prefix "${CMAKE_MATCH_1}")
 			set(_board_identifier "${pl_arch}.${CMAKE_MATCH_1}")
+			properties_get_value("ard_boards.${boards_idx}" "${_board_prefix}.hide"
+				_board_hide QUIET DEFAULT "FALSE")
+			if (_board_hide)
+				continue()
+			endif()
 			list(APPEND _board_identifier_list "${_board_identifier}")
 			set("${namespace}.${_board_identifier}/prop_namespace" "ard_boards.${boards_idx}")
 			set("${namespace}.${_board_identifier}/prop_namespace" "ard_boards.${boards_idx}" PARENT_SCOPE)
@@ -402,7 +406,6 @@ endfunction()
 # <return_value> [OUT]: The value of the property is returned in this variable
 #
 function(boards_get_property namespace board_identifier prop_name return_value)
-	cmake_parse_arguments(parsed_args "" "" "" ${ARGN})
 	if (NOT DEFINED "${namespace}/list")
 		message(FATAL_ERROR "Boards namespace ${namespace} not found!!!")
 	endif()
@@ -421,8 +424,8 @@ function(boards_get_property namespace board_identifier prop_name return_value)
 		set(prop_namespace "${${namespace}.${board_identifier}/prop_namespace}")
 		string(REGEX MATCH "^([^.]+)\\.([^.]+)$" match "${board_identifier}")
 		set(_board_prefix "${CMAKE_MATCH_2}")
-		properties_get_value("${prop_namespace}" "${_board_prefix}.${prop_name}" _value
-			${parsed_args_UNPARSED_ARGUMENTS})
+		properties_get_value("${prop_namespace}" "${_board_prefix}.${prop_name}"
+			_value ${ARGN})
 		set("${return_value}" "${_value}" PARENT_SCOPE)
 	endif()
 endfunction()
@@ -474,7 +477,7 @@ function(boards_get_platform_property namespace board_identifier prop_name retur
 		message(FATAL_ERROR "Board ${board_identifier} not found in ${namespace}!!!")
 	endif()
 	set(pl_id "${${namespace}.${board_identifier}/pl_id}")
-	platforms_get_property("ard_plat" "${pl_id}" "${prop_name}" _value)
+	platforms_get_property("ard_plat" "${pl_id}" "${prop_name}" _value ${ARGN})
 	set("${return_value}" "${_value}" PARENT_SCOPE)
 endfunction()
 
@@ -490,7 +493,6 @@ endfunction()
 # <return_value> [OUT]: The value of the property is returned in this variable
 #
 function(programmer_get_property namespace prog_id prop_name return_value)
-	cmake_parse_arguments(parsed_args "" "" "" ${ARGN})
 	if (NOT DEFINED "${namespace}/list")
 		message(FATAL_ERROR "Boards namespace ${namespace} not found!!!")
 	endif()
@@ -501,7 +503,7 @@ function(programmer_get_property namespace prog_id prop_name return_value)
 	string(REGEX MATCH "^([^.]+)\\.([^.]+)$" match "${prog_id}")
 	set(_prog_prefix "${CMAKE_MATCH_2}")
 	properties_get_value("${prop_namespace}" "${_prog_prefix}.${prop_name}"
-		_value ${parsed_args_UNPARSED_ARGUMENTS})
+		_value ${ARGN})
 	set("${return_value}" "${_value}" PARENT_SCOPE)
 endfunction()
 
