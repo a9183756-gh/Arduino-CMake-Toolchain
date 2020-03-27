@@ -7,6 +7,7 @@ endif()
 set(_BOARD_BUILD_TARGETS_INCLUDED TRUE)
 
 include(CMakeParseArguments)
+INCLUDE(Arduino/Utilities/CommonUtils)
 INCLUDE(Arduino/Utilities/SourceLocator)
 include(Arduino/Utilities/SourceDependency)
 include(Arduino/System/BoardToolchain)
@@ -733,6 +734,10 @@ function(_add_internal_arduino_core target)
 	endif()
 	# find_header_files("${ARDUINO_BOARD_BUILD_CORE_PATH}" core_headers)
 	# find_header_files("${ARDUINO_BOARD_BUILD_VARIANT_PATH}" variant_headers)
+
+	# On some platforms, files ending with small case .s not taken and cause issues
+	# filter this out
+	list_filter_exclude_regex(core_sources ".s$")
 
 	# get_headers_parent_directories("${core_headers};${variant_headers}" include_dirs)
 

@@ -14,7 +14,7 @@ set(ARDUINO_CMAKE_C_FILES_PATTERN *.c CACHE STRING
 		"C Source Files Pattern")
 set(ARDUINO_CMAKE_CXX_FILES_PATTERN *.cc *.cpp *.cxx CACHE STRING
 		"CXX Source Files Pattern")
-set(ARDUINO_CMAKE_ASM_FILES_PATTERN *.[S] CACHE STRING
+set(ARDUINO_CMAKE_ASM_FILES_PATTERN *.[sS] CACHE STRING
 		"ASM Source Files Pattern")
 set(ARDUINO_CMAKE_HEADER_FILES_PATTERN *.h *.hh *.hpp *.hxx CACHE STRING
 		"Header Files Pattern")
