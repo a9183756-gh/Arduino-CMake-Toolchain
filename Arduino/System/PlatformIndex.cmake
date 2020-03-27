@@ -160,6 +160,26 @@ macro(platforms_set_parent_scope namespace)
 endmacro()
 
 #==============================================================================
+# Get the platform ID given the packager and the architecture. This also can be
+# used to check if the given platform exists in the namespace
+function(platforms_get_id namespace pkg_name pl_arch return_id)
+
+	if (NOT DEFINED "${namespace}/list")
+		message(FATAL_ERROR "Platform namespace ${namespace} not found!!!")
+	endif()
+
+	set(pl_id "${pkg_name}.${pl_arch}")
+
+	if (NOT DEFINED "${namespace}.${pl_id}/json_namespace")
+		set("${return_id}" "" PARENT_SCOPE)
+		return()
+	endif()
+
+	set("${return_id}" "${pl_id}" PARENT_SCOPE)
+
+endfunction()
+
+#==============================================================================
 # Implementation functions (Subject to change. DO NOT USE)
 #
 
