@@ -10,6 +10,7 @@ set(_BOARDS_INDEX_INCLUDED TRUE)
 # Indexing of arduino boards. For indexing arduino boards, arduino platforms
 # needs to be indexed using 'IndexArduinoPlatforms' (See PlatformIndex.cmake).
 
+include(CMakeParseArguments)
 include(Arduino/Utilities/CommonUtils)
 include(Arduino/Utilities/PropertiesReader)
 include(Arduino/System/PackagePathIndex)
@@ -479,6 +480,49 @@ function(boards_get_platform_property namespace board_identifier prop_name retur
 	set(pl_id "${${namespace}.${board_identifier}/pl_id}")
 	platforms_get_property("ard_plat" "${pl_id}" "${prop_name}" _value ${ARGN})
 	set("${return_value}" "${_value}" PARENT_SCOPE)
+endfunction()
+
+#==============================================================================
+# This function returns the referenced platform property value of the specified
+# board. Note that, some platforms do not implement the entire toolchain, but
+# refers to other platform(s) for the part of the toolchain functionality and
+# also for the Arduino code and libraries.
+#
+# Arguments:
+# <namespace> [IN]: The namespace passed to 'IndexArduinoBoards'
+# <board_identifier> [IN]: board identifier (one of the entries in the list
+# returned by 'boards_get_list')
+# <ref_pkg_name> [IN]: Referenced packager name
+# <prop_name> [IN]: JSON property name (rooted at the specified platform
+# entry, corresponding to the referenced platform, within the JSON file)
+# <return_value> [OUT]: The value of the property is returned in this variable
+#
+function(boards_get_ref_platform_property namespace board_identifier
+	ref_pkg_name prop_name return_value)
+
+	cmake_parse_arguments(parsed_args "QUIET" "DEFAULT" "" ${ARGN})
+
+	if (NOT DEFINED "${namespace}/list")
+		message(FATAL_ERROR "Boards namespace ${namespace} not found!!!")
+	endif()
+	if (NOT DEFINED "${namespace}.${board_identifier}/pl_id")
+		message(FATAL_ERROR "Board ${board_identifier} not found in ${namespace}!!!")
+	endif()
+	set(pl_id "${${namespace}.${board_identifier}/pl_id}")
+	platforms_get_property("ard_plat" "${pl_id}" "architecture" pl_arch)
+	platforms_get_id("ard_plat" "${ref_pkg_name}" "${pl_arch}" _ref_pl_id)
+	if (NOT _ref_pl_id)
+		if (NOT parsed_args_QUIET  AND "${parsed_args_DEFAULT}" STREQUAL "")
+			message(FATAL_ERROR
+				"Referenced platform ${ref_pkg_name} not found in ${namespace}!!!")
+		endif()
+		set("${return_value}" "${parsed_args_DEFAULT}" PARENT_SCOPE)
+		return()
+	endif()
+	platforms_get_property("ard_plat" "${_ref_pl_id}" "${prop_name}" _value
+		${ARGN})
+	set("${return_value}" "${_value}" PARENT_SCOPE)
+
 endfunction()
 
 #==============================================================================

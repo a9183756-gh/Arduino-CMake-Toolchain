@@ -25,11 +25,11 @@ include(Arduino/System/BoardsIndex)
 # which is a file containing the variables ARDUINO_BOARD and other menu options.
 # See BoardsIndex.cmake for details).
 #
-# This function transfers the board properties of the selected board to a 
+# This function transfers the board properties of the selected board to a
 # global namespace. The function 'arduino_board_get_property' can be used to
 # query the property of the selected board, without taking the board identifier
 # as an argument (unlike the functions like boards_get_property).
-# 
+#
 function (SetupBoardToolchain)
 
 	# First index the boards and identify the user selected board
@@ -45,11 +45,31 @@ function (SetupBoardToolchain)
 	endif()
 	set(ARDUINO_BOARD_IDENTIFIER ${ARDUINO_BOARD_IDENTIFIER} PARENT_SCOPE)
 
+	# Set some initial find root paths
+	if (ARDUINO_SKETCHBOOK_PATH)
+		list(APPEND ARDUINO_FIND_ROOT_PATH "${ARDUINO_SKETCHBOOK_PATH}")
+	endif()
+
 	# Read some properties from the board
 	_board_get_platform_property("architecture" ARDUINO_BOARD_BUILD_ARCH)
 	string(TOUPPER "${ARDUINO_BOARD_BUILD_ARCH}" ARDUINO_BOARD_BUILD_ARCH)
 	_board_get_platform_property("/path" ARDUINO_BOARD_RUNTIME_PLATFORM_PATH)
-	string_escape_quoting(ARDUINO_BOARD_RUNTIME_PLATFORM_PATH)
+
+	# First inherit the platform.txt from the referenced platform
+	_board_get_property("build.core" _prop_value  QUIET)
+	_get_ref_platform("${_prop_value}" _core_pkg_name _build_core)
+	if (_core_pkg_name)
+		# Read platform.txt and platform.local.txt of referenced platform into
+		# the ard_global namespace. Anything read here could be overridden
+		# later while transfering properties from board.txt
+		_load_platform_properties(ard_global "${_core_pkg_name}")
+		_board_get_ref_platform_property("${_core_pkg_name}" "/path"
+			ARDUINO_CORE_SPECIFIC_PLATFORM_PATH)
+		set(_core_pl_path "${ARDUINO_CORE_SPECIFIC_PLATFORM_PATH}")
+	else()
+		set(ARDUINO_CORE_SPECIFIC_PLATFORM_PATH)
+		set(_core_pl_path "${ARDUINO_BOARD_RUNTIME_PLATFORM_PATH}")
+	endif()
 
 	# Read platform.txt and platform.local.txt into the ard_global namespace
 	# Anything read here could be overridden later while transfering properties
@@ -59,25 +79,23 @@ function (SetupBoardToolchain)
 	if (EXISTS "${_local_path}/platform.local.txt")
 		properties_read("${_local_path}/platform.local.txt" ard_global)
 	endif()
-	
+
 	# Set build.arch
 	properties_set_value("ard_global" "build.arch" "${ARDUINO_BOARD_BUILD_ARCH}")
 
-	# Set some initial find root paths	
-	if (ARDUINO_SKETCHBOOK_PATH)
-		list(APPEND ARDUINO_FIND_ROOT_PATH "${ARDUINO_SKETCHBOOK_PATH}")
-	endif()
 	list(APPEND ARDUINO_FIND_ROOT_PATH "${ARDUINO_BOARD_RUNTIME_PLATFORM_PATH}")
-	# TODO: Reference board path
+	if (ARDUINO_CORE_SPECIFIC_PLATFORM_PATH)
+		list(APPEND ARDUINO_FIND_ROOT_PATH "${_core_pl_path}")
+	endif()
 
 	# Set runtime.platform.path
 	properties_set_value("ard_global" "runtime.platform.path"
 		"${ARDUINO_BOARD_RUNTIME_PLATFORM_PATH}")
-	
+
 	# Set runtime.hardware.path
 	_board_get_platform_property("/hw_path" _prop_value)
 	properties_set_value("ard_global" "runtime.hardware.path" "${_prop_value}")
-	
+
 	# Set runtime.ide.path, runtime.ide.version and ide_version
 	set(_version "10000")
 	set(_path "${ARDUINO_TOOLCHAIN_DIR}")
@@ -91,31 +109,38 @@ function (SetupBoardToolchain)
 	properties_set_value("ard_global" "runtime.ide.path" "${_path}")
 	properties_set_value("ard_global" "runtime.ide.version" "${_version}")
 	properties_set_value("ard_global" "ide_version" "${_version}")
-	
+
 	# Set build.core.path and ARDUINO_BOARD_BUILD_CORE_PATH
-	_board_get_property("build.core" _prop_value  DEFAULT "arduino")
-	set(ARDUINO_BOARD_BUILD_CORE_PATH
-		"${ARDUINO_BOARD_RUNTIME_PLATFORM_PATH}/cores/${_prop_value}")
+	set(ARDUINO_BOARD_BUILD_CORE_PATH "${_core_pl_path}/cores/${_build_core}")
+
 	properties_set_value("ard_global" "build.core.path"
 		"${ARDUINO_BOARD_BUILD_CORE_PATH}")
 	string_escape_quoting(ARDUINO_BOARD_BUILD_CORE_PATH)
-	
+
 	# Set build.variant.path and ARDUINO_BOARD_BUILD_VARIANT_PATH
 	_board_get_property("build.variant" _prop_value QUIET DEFAULT "")
 	if (_prop_value)
+		_get_ref_platform("${_prop_value}" _variant_pkg_name _build_variant)
+		if (_variant_pkg_name)
+			_board_get_ref_platform_property("${_variant_pkg_name}" "/path"
+				_variant_pl_path)
+		else()
+			set(_variant_pl_path "${ARDUINO_BOARD_RUNTIME_PLATFORM_PATH}")
+		endif()
 		set(ARDUINO_BOARD_BUILD_VARIANT_PATH
-			"${ARDUINO_BOARD_RUNTIME_PLATFORM_PATH}/variants/${_prop_value}")
+			"${_variant_pl_path}/variants/${_build_variant}")
 	else()
 		set(ARDUINO_BOARD_BUILD_VARIANT_PATH)
 	endif()
+
 	properties_set_value("ard_global" "build.variant.path"
 		"${ARDUINO_BOARD_BUILD_VARIANT_PATH}")
 	string_escape_quoting(ARDUINO_BOARD_BUILD_VARIANT_PATH)
-	
+
 	# Set build.system.path
 	properties_set_value("ard_global" "build.system.path"
 		"${ARDUINO_BOARD_RUNTIME_PLATFORM_PATH}/system")
-	
+
 	# Set runtime.os and ARDUINO_BOARD_HOST_NAME
 	if (${CMAKE_HOST_APPLE})
 		set(ARDUINO_BOARD_HOST_NAME "macosx")
@@ -125,32 +150,87 @@ function (SetupBoardToolchain)
 		set(ARDUINO_BOARD_HOST_NAME "windows")
 	endif()
 	properties_set_value("ard_global" "runtime.os" "${ARDUINO_BOARD_HOST_NAME}")
-	
-	# Set runtime.tools.<name>.path and runtime.tools.<name>-<version>.path
-	_board_get_platform_property("/tool_path" _tool_path)
-	_board_get_platform_property("toolsDependencies.N" _num_tools)
-	if (${_num_tools} GREATER 0)
-		foreach (_tool_idx RANGE 1 "${_num_tools}")
-			_board_get_platform_property("toolsDependencies.${_tool_idx}.name"
-				_tool_name)
-			_board_get_platform_property("toolsDependencies.${_tool_idx}.version"
-				_tool_version)
-			_board_get_platform_property("toolsDependencies.${_tool_idx}.packager"
-				_tool_packager)
-			string(REPLACE "{tool_name}" "${_tool_name}" _prop_value
-				"${_tool_path}")
-			string(REPLACE "{tool_version}" "${_tool_version}" _prop_value
-				"${_prop_value}")
-			string(REPLACE "{tl_packager}" "${_tool_packager}" _prop_value
-				"${_prop_value}")
-			properties_set_value("ard_global" "runtime.tools.${_tool_name}.path"
-				"${_prop_value}")
-			properties_set_value("ard_global"
-				"runtime.tools.${_tool_name}-${_tool_version}.path"
-				"${_prop_value}")
-			list(APPEND ARDUINO_FIND_ROOT_PATH "${_prop_value}")
-		endforeach()
+
+	# Find if the tools used are in a referenced platform. If so, load the
+	# properties of the referenced platform and copy the tool's properties
+	# from there. Also the runtime.tools.<name>.path will be set from the
+	# referenced platform subsequently.
+	set(_tool_prop_list "upload.tool" "program.tool" "bootloader.tool")
+	set(_tool_recipe_regex_list "upload\\.pattern|upload\\.network_pattern"
+		"program\\.pattern|erase\\.pattern" "bootloader\\.pattern")
+	list(LENGTH _tool_prop_list _tool_prop_len)
+	math(EXPR _tool_last_idx "${_tool_prop_len}-1")
+	set(last_tool_pkg_name)
+	foreach(_tool_prop_idx RANGE 0 ${_tool_last_idx})
+		list(GET _tool_prop_list ${_tool_prop_idx} _tool_prop)
+		list(GET _tool_recipe_regex_list ${_tool_prop_idx} _tool_recipe_regex)
+		_board_get_property("${_tool_prop}" _tool_name QUIET DEFAULT "")
+		if (NOT _tool_name)
+			continue()
+		endif()
+		_get_ref_platform("${_tool_name}" _ref_tool_pkg_name _tool_name)
+		if (_ref_tool_pkg_name AND
+			NOT "${_ref_tool_pkg_name}" STREQUAL "${_core_pkg_name}")
+			list(APPEND _ref_tool_pkgs "${_ref_tool_pkg_name}")
+			if (NOT _ref_tool_pkg_name STREQUAL last_tool_pkg_name) # Optimization
+				_load_platform_properties(ard_tool_local "${_ref_tool_pkg_name}"
+					RESET)
+				properties_resolve_all_values(ard_tool_local)
+			endif()
+			set(last_tool_pkg_name "${_ref_tool_pkg_name}")
+			properties_get_list(ard_tool_local
+				"^tool\\.${_tool_name}\\.(${_pattern_name_regex})$"
+				_pattern_name_list)
+			foreach(_pattern_name IN LISTS _pattern_name_list)
+				properties_get_value(ard_tool_local "${_pattern_name}" _pattern)
+				properties_set_value(ard_global "${_pattern_name}" "${_pattern}")
+			endforeach()
+		endif()
+	endforeach()
+	if (_ref_tool_pkgs)
+		list(REMOVE_DUPLICATES _ref_tool_pkgs)
 	endif()
+	if (_core_pkg_name)
+		list(APPEND _ref_tool_pkgs "${_core_pkg_name}")
+	endif()
+	_board_get_platform_property("/json_pkg" pkg_name)
+	list(APPEND _ref_tool_pkgs "${pkg_name}")
+
+	# Set runtime.tools.<name>.path and runtime.tools.<name>-<version>.path
+	# of tools from the referenced platform. This includes core referred
+	# platform for compilation tools and other *.tool referrd platforms
+	set(_tool_root_path)
+	foreach(_ref_pkg_name IN LISTS _ref_tool_pkgs)
+		_board_get_ref_platform_property("${_ref_pkg_name}" "/tool_path"
+			_tool_path)
+		_board_get_ref_platform_property("${_ref_pkg_name}"
+			"toolsDependencies.N" _num_tools)
+		if (${_num_tools} GREATER 0)
+			foreach (_tool_idx RANGE 1 "${_num_tools}")
+				_board_get_ref_platform_property("${_ref_pkg_name}"
+					"toolsDependencies.${_tool_idx}.name" _tool_name)
+				_board_get_ref_platform_property("${_ref_pkg_name}"
+					"toolsDependencies.${_tool_idx}.version" _tool_version)
+				_board_get_ref_platform_property("${_ref_pkg_name}"
+					"toolsDependencies.${_tool_idx}.packager" _tool_packager)
+				string(REPLACE "{tool_name}" "${_tool_name}" _prop_value
+					"${_tool_path}")
+				string(REPLACE "{tool_version}" "${_tool_version}" _prop_value
+					"${_prop_value}")
+				string(REPLACE "{tl_packager}" "${_tool_packager}" _prop_value
+					"${_prop_value}")
+				properties_set_value("ard_global" "runtime.tools.${_tool_name}.path"
+					"${_prop_value}")
+				properties_set_value("ard_global"
+					"runtime.tools.${_tool_name}-${_tool_version}.path"
+					"${_prop_value}")
+				list(APPEND _tool_root_path "${_prop_value}")
+			endforeach()
+		endif()
+	endforeach()
+
+	list(REMOVE_DUPLICATES _tool_root_path)
+	list(APPEND ARDUINO_FIND_ROOT_PATH ${_tool_root_path})
 
 	# Transfer properties of the selected board and properties corresponding to
 	# the selected menu options
@@ -212,7 +292,7 @@ function (SetupBoardToolchain)
 			"recipe\\.hooks\\.sketch\\.prebuild\\.[0-9]+\\.pattern"
 			"recipe\\.hooks\\.libraries\\.prebuild\\.[0-9]+\\.pattern"
 			"recipe\\.hooks\\.core\\.prebuild\\.[0-9]+\\.pattern")
-	
+
 		properties_get_list(ard_global "${_pattern_name_regex}"
 			_pattern_name_list)
 		foreach(_pattern_name IN LISTS _pattern_name_list)
@@ -225,9 +305,9 @@ function (SetupBoardToolchain)
 				_pattern_gen_file_list "${_pattern}")
 			list(APPEND _gen_file_list "${_pattern_gen_file_list}")
 		endforeach()
-	
+
 	endforeach()
-	
+
 	# Now replace the files generated in prebuild patterns with common path in
 	# all patterns
 	# message("_gen_file_list:${_gen_file_list}")
@@ -236,7 +316,7 @@ function (SetupBoardToolchain)
 	string(REPLACE "{build.project_name}" "{cmake_project_name}" _gen_replace_list
 		"${_gen_replace_list}")
 	# message("_gen_replace_list:${_gen_replace_list}")
-	
+
 	# Replace the generated files in prebuild patterns as common generated files
 	foreach(_pattern_name_regex "recipe\\..*pattern" "tools\\..*pattern")
 		properties_get_list(ard_global "${_pattern_name_regex}" _pattern_name_list)
@@ -269,7 +349,7 @@ function (SetupBoardToolchain)
 	# properties_print_all(ard_global)
 	# Resolve all the known variables so far. Remaining will be resolved later
 	properties_resolve_all_values(ard_global)
-	
+
 	# message("\n\nAll properties in global")
 	# properties_print_all(ard_global)
 
@@ -299,7 +379,7 @@ function (SetupBoardToolchain)
 	set(CMAKE_C_COMPILE_OBJECT "<CMAKE_C_COMPILER> ${_build_string}")
 	string_escape_quoting(CMAKE_C_COMPILER)
 	string_escape_quoting(CMAKE_C_COMPILE_OBJECT)
-	
+
 	# CMAKE_CXX_COMPILER
 	_resolve_build_rule_properties("recipe.cpp.o.pattern" _build_cmd
 		_build_string)
@@ -307,7 +387,7 @@ function (SetupBoardToolchain)
 	set(CMAKE_CXX_COMPILE_OBJECT "<CMAKE_CXX_COMPILER> ${_build_string}")
 	string_escape_quoting(CMAKE_CXX_COMPILER)
 	string_escape_quoting(CMAKE_CXX_COMPILE_OBJECT)
-	
+
 	# CMAKE_ASM_COMPILER
 	_resolve_build_rule_properties("recipe.S.o.pattern" _build_cmd
 		_build_string)
@@ -317,17 +397,17 @@ function (SetupBoardToolchain)
 		string_escape_quoting(CMAKE_ASM_COMPILER)
 		string_escape_quoting(CMAKE_ASM_COMPILE_OBJECT)
 	endif()
-	
+
 	# CMAKE_C_LINK_EXECUTABLE
 	_resolve_build_rule_properties("recipe.c.combine.pattern" _build_cmd
 		_build_string)
 	set(CMAKE_C_LINK_EXECUTABLE "<CMAKE_C_COMPILER> ${_build_string}")
 	string_escape_quoting(CMAKE_C_LINK_EXECUTABLE)
-	
+
 	# CMAKE_CXX_LINK_EXECUTABLE
 	set(CMAKE_CXX_LINK_EXECUTABLE "<CMAKE_CXX_COMPILER> ${_build_string}")
 	string_escape_quoting(CMAKE_CXX_LINK_EXECUTABLE)
-	
+
 	# CMAKE_C_CREATE_STATIC_LIBRARY
 	_resolve_build_rule_properties("recipe.ar.pattern" _build_cmd
 		_build_string)
@@ -335,15 +415,14 @@ function (SetupBoardToolchain)
 	set(CMAKE_C_CREATE_STATIC_LIBRARY "<CMAKE_AR> ${_build_string}")
 	string_escape_quoting(CMAKE_AR)
 	string_escape_quoting(CMAKE_C_CREATE_STATIC_LIBRARY)
-	
+
 	# CMAKE_CXX_CREATE_STATIC_LIBRARY
 	set(CMAKE_CXX_CREATE_STATIC_LIBRARY "<CMAKE_AR> ${_build_string}")
 	string_escape_quoting(CMAKE_CXX_CREATE_STATIC_LIBRARY)
 
 	# properties_set_parent_scope(ard_global)
-	
+
 	list(APPEND ARDUINO_FIND_ROOT_PATH "${ARDUINO_INSTALL_PATH}")
-	list(REMOVE_DUPLICATES ARDUINO_FIND_ROOT_PATH)
 
 	_find_system_program_path()
 	list(APPEND ARDUINO_SYSTEM_PROGRAM_PATH "/bin")
@@ -371,6 +450,7 @@ function (SetupBoardToolchain)
 	set(ARDUINO "${CMAKE_SYSTEM_VERSION}")
 	set("ARDUINO_ARCH_${CMAKE_SYSTEM_PROCESSOR}" TRUE)
 	SET("ARDUINO_${ARDUINO_BOARD}" TRUE)
+	string_escape_quoting(ARDUINO_BOARD_RUNTIME_PLATFORM_PATH)
 
 	configure_file(
 		"${ARDUINO_TOOLCHAIN_DIR}/Arduino/Templates/ArduinoSystem.cmake.in"
@@ -449,7 +529,7 @@ endfunction()
 
 # Return property of the platform of the currently selected board
 function (_board_get_platform_property prop return_value)
-	boards_get_platform_property(ard_brd 
+	boards_get_platform_property(ard_brd
 		"${ARDUINO_BOARD_IDENTIFIER}" ${prop} _return_value ${ARGN})
 	set("${return_value}" "${_return_value}" PARENT_SCOPE)
 endfunction()
@@ -461,6 +541,14 @@ function (_board_get_property_list pattern return_list)
 	set("${return_list}" "${_return_list}" PARENT_SCOPE)
 endfunction()
 
+# Return property of the referenced platform of the currently selected board
+function (_board_get_ref_platform_property ref_pkg_name prop return_value)
+	boards_get_ref_platform_property(ard_brd
+		"${ARDUINO_BOARD_IDENTIFIER}" "${ref_pkg_name}" ${prop}
+		_return_value ${ARGN})
+	set("${return_value}" "${_return_value}" PARENT_SCOPE)
+endfunction()
+
 # Used by arduino_board_get_target_cmd to expand some tool related variables
 function(_resolve_tool_properties tool tool_string return_string)
 
@@ -469,7 +557,7 @@ function(_resolve_tool_properties tool tool_string return_string)
 	foreach(_prop IN LISTS _tool_properties)
 		properties_get_value(ard_global "${_prop}" _value)
 		string(REGEX REPLACE "^tools\\.${tool}\\." "" _local_prop "${_prop}")
-		properties_set_value(ard_local "${_local_prop}" "${_value}")
+		properties_set_value(ard_local "${_local_prop}" "${_value}" RESET)
 	endforeach()
 
 	# Transfer verbose properties, no quiet mode for now
@@ -613,7 +701,7 @@ function(_resolve_target_properties target target_string return_string)
 		_target_string "${_target_string}")
 	string(REPLACE "{build.path}" "$<TARGET_PROPERTY:${target},BINARY_DIR>"
 		_target_string "${_target_string}")
-	_gen_non_empty_string("$<TARGET_PROPERTY:${target},OUTPUT_NAME>" 
+	_gen_non_empty_string("$<TARGET_PROPERTY:${target},OUTPUT_NAME>"
 		"$<TARGET_PROPERTY:${target},NAME>" proj_name)
 	string(REPLACE "{build.project_name}" "${proj_name}" _target_string
 		"${_target_string}")
@@ -802,3 +890,33 @@ function (_gen_execute_recipe_script)
 		"${CMAKE_BINARY_DIR}/ExecuteRecipe.cmake" @ONLY)
 endfunction()
 
+# Get referenced platform from the string
+function(_get_ref_platform str return_pkg_name return_str)
+	string(REPLACE ":" ";" str_list "${str}")
+	list(LENGTH str_list _len)
+	if (_len EQUAL 2)
+		list(GET str_list 0 _return_pkg_name)
+		list(GET str_list 1 _return_str)
+		set("${return_pkg_name}" "${_return_pkg_name}" PARENT_SCOPE)
+		set("${return_str}" "${_return_str}" PARENT_SCOPE)
+	else()
+		set("${return_pkg_name}" "" PARENT_SCOPE)
+		set("${return_str}" "${str}" PARENT_SCOPE)
+	endif()
+endfunction()
+
+function(_load_platform_properties namespace pkg_name)
+
+	_board_get_ref_platform_property("${pkg_name}" "/path" _pl_path)
+
+	# Read platform.txt and platform.local.txt of the given platform into
+	# the given namespace.
+	properties_read("${_pl_path}/platform.txt" "${namespace}")
+	_board_get_ref_platform_property("${pkg_name}" "/local_path" _local_path)
+	if (EXISTS "${_local_path}/platform.local.txt")
+		properties_read("${_local_path}/platform.local.txt" "${namespace}")
+	endif()
+
+	properties_set_parent_scope("${namespace}")
+
+endfunction()
