@@ -26,6 +26,27 @@ function(list_filter_include_regex _list_var _regex)
 
 endfunction()
 
+# List filter is not available in older versions of cmake
+# Providing equivalent versions for the same
+function(list_filter_exclude_regex _list_var _regex)
+
+	if (CMAKE_VERSION VERSION_LESS 3.6.3)
+		set(_result)
+		foreach(_elem IN LISTS "${_list_var}")
+			string(REGEX MATCH "${_regex}" _match "${_elem}")
+			if (NOT _match)
+				list(APPEND _result "${_elem}")
+			endif()
+		endforeach()
+		set("${_list_var}" "${_result}" PARENT_SCOPE)
+	else()
+		list(FILTER "${_list_var}" EXCLUDE REGEX  "${_regex}")
+		set("${_list_var}" "${${_list_var}}" PARENT_SCOPE)
+	endif()
+
+endfunction()
+
+
 # List TRANSFORM is not available in older versions of cmake
 # Providing equivalent versions for the same
 function(list_transform_replace _list_var _regex _replace)
