@@ -1,0 +1,93 @@
+<h1 id="arduino-cmake-toolchain">Arduino CMake Toolchain</h1>
+<p><strong>Arduino CMake toolchain</strong> (<a href="https://github.com/a9183756-gh/Arduino-CMake-Toolchain">https://github.com/a9183756-gh/Arduino-CMake-Toolchain</a>) is a CMake toolchain for cross-compiling CMake based projects for all Arduino compatible boards (AVR, ESP32 etc.). Of course, this means all the benefits of CMake for Arduino compilation, like using your favourite IDE, configuration checks (e.g. <code>try_compile</code>, <code>CheckTypeSize</code>), etc. This also brings the Arduino compilation to professional users, who are limited by the Arduino IDE compilation.</p>
+<h2 id="project-roots">Project Roots</h2>
+<p><a href="https://github.com/arduino-cmake/Arduino-CMake-NG">Arduino-CMake-NG</a> is a great project, which could have prevented me from writing yet another Arduino CMake toolchain. However, as claimed by the project, Arduino-CMake-NG could not be easily utilized/modified for other Arduino compatible boards other than AVR, like ESP32, due to the fact that it does not fully work the way Arduino IDE works and has lot of AVR specific stuff. An other important limitation is related to portability. Arduino-CMake-NG provides Arduino specific CMake interface, requiring CMake scripts to be written/modified specifically for Arduino, rather than just passing <code>-D CMAKE_TOOLCHAIN_FILE=/path/to/Arduino-toolchain.cmake</code> to a generic CMake project.</p>
+<p>My initial expectation was to contribute to Arduino-CMake-NG to fix the above limitations, but had to redo a lot of core logic making it very incompatible (including the usage). Also, the project Arduino-CMake-NG seems to be no longer maintained. I would like to acknowledge the authors who contributed directly/indirectly to Arduino-CMake-NG, and thus indirectly contributed to this project.</p>
+<h2 id="features">Features</h2>
+<ul>
+<li>[x] CMake Arduino toolchain (passed to CMake using <code>-D CMAKE_TOOLCHAIN_FILE=/path/to/Arduino-toolchain.cmake)</code><ul>
+<li>[x] Support for all Arduino compatible platforms (such as <strong>AVR</strong>, <strong>ESP32</strong> etc.)</li>
+<li>[x] Generic CMake scripting interface without requiring Arduino specific functions</li>
+<li>[x] Arduino IDE compatible build (e.g. use of build rules and flags in board.local.txt, pre/postbuild hooks etc.)</li>
+<li>[x] Selection of board and board-specific menu options as in Arduino IDE tools menu (See <code>ARDUINO_BOARD_OPTIONS_FILE</code>)</li>
+</ul>
+</li>
+<li>[x] Generate Arduino HEX binaries and upload to Arduino boards (See <code>target_enable_arduino_upload</code>)<ul>
+<li>[x] Upload using serial port</li>
+<li>[x] Remote provisioning through network</li>
+<li>[x] Upload using programmer</li>
+<li>[x] Burn bootloader</li>
+</ul>
+</li>
+<li>[x] Support linking with Arduino libraries (see <code>target_link_arduino_libraries</code>)<ul>
+<li>[x] Arduino <em>native</em> libraries (e.g. Ethernet, Wire)</li>
+<li>[x] User installed 3rd Party Arduino libraries (e.g. IRremote)</li>
+<li>[x] Project specific Arduino libraries (those present in <code>&lt;CMAKE_SOURCE_DIR&gt;/libraries</code>)</li>
+</ul>
+</li>
+<li>[x] Support for automatic dependency resolution (Arduino IDE like, but unprofessional)</li>
+<li>[ ] Serial port monitoring</li>
+<li>[ ] Support for <code>.ino</code> and &#39;.pde&#39; sketch files (Arduino IDE like, but unprofessional)</li>
+<li>[ ] Board and Libraries Management without requiring installation of Arduino IDE</li>
+</ul>
+<h2 id="usage">Usage</h2>
+<p>The provided toolchain file (Arduino-toolchain.cmake) is passed to cmake as folows</p>
+<pre><code class="lang-sh">cmake -D CMAKE_TOOLCHAIN_FILE=<span class="hljs-meta-keyword">/path/</span>to/Arduino-toolchain.cmake <span class="hljs-params">&lt;CMAKE_SOURCE_DIR&gt;</span>
+</code></pre>
+<p>Note: As this is cross compilation, use any cross compilation compatible generator, like makefile generators (e.g. <code>-G &quot;NMake Makefiles&quot;</code> or <code>-G &quot;MinGW Makefiles&quot;</code> on Windows command prompt or <code>-G &quot;Unix Makefiles&quot;</code> on UNIX compatible prompts etc.).</p>
+<p>The above command generates a file <strong>BoardOptions.cmake</strong> in the build directory, that enumerates all the installed Arduino boards (installed through Arduino IDE or any other board manager) and their menu options. Select the Arduino board and any non-default options for the board from the BoardOptions.cmake (Or from cmake-gui), and then reinvoke the above command.</p>
+<p>If you already have a customized BoardOptions.cmake file for the Arduino Board, you can use that instead, without waiting for the generation of BoardOptions.cmake, as given below.</p>
+<pre><code class="lang-sh">cmake -D CMAKE_TOOLCHAIN_FILE=<span class="hljs-meta-keyword">/path/</span>to/Arduino-toolchain.cmake -D ARDUINO_BOARD_OPTIONS_FILE=<span class="hljs-meta-keyword">/path/</span>to<span class="hljs-meta-keyword">/any/</span>BoardOptions.cmake <span class="hljs-params">&lt;CMAKE_SOURCE_DIR&gt;</span>
+</code></pre>
+<p>Note:</p>
+<ol>
+<li>After the cmake generation is successful, changing the menu options in BoardOptions.cmake may work, but changing the board itself may not be allowed by CMake because the compiler, ABI, features determination and any cache dependencies may not be retriggered again.</li>
+<li>CMake does not support build for multiple architectures in the same build tree. If a project requires to build applications for more than one type of Arduino boards, refer to CMake documentation for multiple architecture build.</li>
+<li>When this toolchain is used, executables (added with <code>add_executable</code>) have the entry points setup()/loop() and not main(). Need to include &quot;Arduino.h&quot; for these entry points.</li>
+<li>If your source files are compiled for both Arduino and other platforms like Linux, then the CMake flag <code>ARDUINO</code> and the compiler flag <code>ARDUINO</code> can be used for script/code portability. Other Arduino board/architecture specific standard flags can also be used.</li>
+</ol>
+<h3 id="linking-with-arduino-code-libraries-target_link_arduino_libraries-">Linking with Arduino code/libraries (<code>target_link_arduino_libraries</code>)</h3>
+<p><code>&lt;CMAKE_SOURCE_DIR&gt;/CMakeLists.txt</code> and any other dependent CMake scripts of the project contain the standard CMake scripting using <code>add_library</code>, <code>add_executable</code> etc. without Arduino specific changes. Refer to CMake documentation for the same. However when the project source code depends on the Arduino code or libraries (i.e. includes the corresponding header files), then appropriate linking is required, as expected. This is done using <code>target_link_arduino_libraries</code> as explained below.</p>
+<p>If Arduino.h is included in your source files, then the target must be linked against the &#39;core&#39; Arduino library as follows.</p>
+<pre><code class="lang-cmake"><span class="hljs-selector-tag">add_library</span>(<span class="hljs-selector-tag">my_library</span> <span class="hljs-selector-tag">my_library</span><span class="hljs-selector-class">.c</span>) # <span class="hljs-selector-tag">my_library</span><span class="hljs-selector-class">.c</span> <span class="hljs-selector-tag">includes</span> <span class="hljs-selector-tag">Arduino</span><span class="hljs-selector-class">.h</span>
+<span class="hljs-selector-tag">target_link_arduino_libraries</span>(<span class="hljs-selector-tag">my_library</span> <span class="hljs-selector-tag">PRIVATE</span> <span class="hljs-selector-tag">core</span>)
+</code></pre>
+<p>If any other native or 3rd party libraries are used, then those libraries must be linked similarly as follows.</p>
+<pre><code class="lang-cmake"><span class="hljs-selector-tag">add_executable</span>(<span class="hljs-selector-tag">my_app</span> <span class="hljs-selector-tag">my_app</span><span class="hljs-selector-class">.c</span>) # <span class="hljs-selector-tag">my_app</span><span class="hljs-selector-class">.c</span> <span class="hljs-selector-tag">includes</span> <span class="hljs-selector-tag">Wire</span><span class="hljs-selector-class">.h</span>, <span class="hljs-selector-tag">Arduino</span><span class="hljs-selector-class">.h</span>
+<span class="hljs-selector-tag">target_link_arduino_libraries</span>(<span class="hljs-selector-tag">my_app</span> <span class="hljs-selector-tag">PRIVATE</span> <span class="hljs-selector-tag">Wire</span> <span class="hljs-selector-tag">core</span>)
+</code></pre>
+<p>Like Arduino IDE, if the required Arduino libraries are to be automatically identified and linked, then it can be done as follows.</p>
+<pre><code class="lang-cmake"><span class="hljs-selector-tag">add_executable</span>(<span class="hljs-selector-tag">my_app</span> <span class="hljs-selector-tag">my_app</span><span class="hljs-selector-class">.c</span>) # <span class="hljs-selector-tag">my_app</span><span class="hljs-selector-class">.c</span> <span class="hljs-selector-tag">includes</span> <span class="hljs-selector-tag">Wire</span><span class="hljs-selector-class">.h</span>, <span class="hljs-selector-tag">Arduino</span><span class="hljs-selector-class">.h</span>
+# <span class="hljs-selector-tag">Link</span> <span class="hljs-selector-tag">Wire</span> <span class="hljs-selector-tag">and</span> <span class="hljs-selector-tag">core</span> <span class="hljs-selector-tag">automatically</span> (<span class="hljs-selector-tag">PUBLIC</span> <span class="hljs-selector-tag">linking</span> <span class="hljs-selector-tag">in</span> <span class="hljs-selector-tag">this</span> <span class="hljs-selector-tag">example</span>)
+<span class="hljs-selector-tag">target_link_arduino_libraries</span>(<span class="hljs-selector-tag">my_app</span> <span class="hljs-selector-tag">AUTO_PUBLIC</span>)
+</code></pre>
+<p>Note:</p>
+<ol>
+<li><em>Wire</em> and <em>core</em> in the above examples are not CMake targets. They are just Arduino library names (case-sensitive).</li>
+<li>It is required only to specify the direct dependencies. Any deeper dependencies are automatically identified and linked. For example, if <em>SD.h</em> is included, it is sufficient to link with <em>SD</em>, even if <em>SD</em> depends on other Arduino libraries, like <em>SPI</em>.</li>
+</ol>
+<p>These examples illustrates simple usage, but powerful enough for most use cases. However more advanced control and customization of Arduino libraries should be possible. Please refer to the <a href="https://github.com/a9183756-gh/Arduino-CMake-Toolchain/tree/master/Examples">Examples</a> folder, as well as the API documentation of <code>target_link_arduino_libraries</code> (Currently documented as comments in <a href="https://github.com/a9183756-gh/Arduino-CMake-Toolchain/blob/master/Arduino/System/BoardBuildTargets.cmake">BoardBuildTargets.cmake</a>).</p>
+<h3 id="uploading-to-the-target-board-target_enable_arduino_upload-">Uploading to the target board (<code>target_enable_arduino_upload</code>)</h3>
+<p>If support for generating HEX binary and uploading it to the board is required, then a call to <code>target_enable_arduino_upload</code> is required for each executable target, as shown below.</p>
+<pre><code class="lang-cmake"><span class="hljs-keyword">add_executable</span>(my_executable my_executable.c)
+target_link_arduino_libraries(my_executable PRIVATE core) <span class="hljs-comment"># Assuming my_executable.c includes Arduino.h</span>
+target_enable_arduino_upload(my_executable) <span class="hljs-comment"># This adds a target upload-my_executable</span>
+</code></pre>
+<p>Upload the executable (from the above example) to the board on COM3 serial port as follows</p>
+<pre><code class="lang-sh">&lt;make-<span class="hljs-keyword">command</span>&gt; <span class="hljs-title">upload-my_executable</span> <span class="hljs-title">SERIAL_PORT</span>=<span class="hljs-title">COM3</span>
+</code></pre>
+<p>Upload the executable to the board through remote provisioning as follows</p>
+<pre><code class="lang-sh"><span class="hljs-tag">&lt;<span class="hljs-name">make-command</span>&gt;</span> upload-my_executable NETWORK_PORT=<span class="hljs-tag">&lt;<span class="hljs-name">IP</span>&gt;</span>[:<span class="hljs-tag">&lt;<span class="hljs-name">port</span>&gt;</span>]
+</code></pre>
+<p>For using a programmer, select the programmer in board options or the CMake GUI, and then execute the following</p>
+<pre><code class="lang-sh">&lt;make-command&gt; <span class="hljs-function"><span class="hljs-keyword">program</span></span>-my_executable CONFIRM=<span class="hljs-number">1</span>
+</code></pre>
+<p>Using the programmer, bootloader can be flashed as below</p>
+<pre><code class="lang-sh">&lt;make-<span class="hljs-keyword">command</span>&gt; <span class="hljs-title">burn-bootloader</span> <span class="hljs-title">CONFIRM</span>=<span class="hljs-title">1</span>
+</code></pre>
+<h2 id="serial-port-monitoring">Serial port monitoring</h2>
+<p>Currently there is no support available for this within this toolchain. However any external serial port monitor can be used (e.g. Putty). External serial monitor may need to be closed before upload and reopened after upload, because both use the same serial port.</p>
+<h2 id="how-it-works">How it works</h2>
+<p>This toolchain follows the build process described in <a href="https://arduino.github.io/arduino-cli/sketch-build-process/">Arduino Build Process</a>, and processes the JSON, platform.txt and boards.txt files correponding to the Arduino platform as specified in the documentation <a href="https://arduino.github.io/arduino-cli/platform-specification/">Arduino IDE 1.5 3rd party Hardware specification</a>.</p>
+<h2 id="license">License</h2>
+<p>MIT © 2020 <a href="https://github.com/a9183756-gh/Arduino-CMake-Toolchain/blob/master/LICENSE.md">Arduino-CMake-Toolchain</a></p>
