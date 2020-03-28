@@ -179,7 +179,7 @@ function (SetupBoardToolchain)
 			endif()
 			set(last_tool_pkg_name "${_ref_tool_pkg_name}")
 			properties_get_list(ard_tool_local
-				"^tool\\.${_tool_name}\\.(${_pattern_name_regex})$"
+				"^tool\\.${_tool_name}\\.(${_tool_recipe_regex})$"
 				_pattern_name_list)
 			foreach(_pattern_name IN LISTS _pattern_name_list)
 				properties_get_value(ard_tool_local "${_pattern_name}" _pattern)
@@ -586,11 +586,12 @@ endfunction()
 function (_resolve_command_patterns)
 
 	set(_rule_name_regex_list "^recipe\\..*\\.pattern$"
-		"^recipe\\..*\\.network_pattern$" "^tools\\..*\\.pattern$")
+		"^tools\\..*\\.network_pattern$" "^tools\\..*\\.pattern$")
 	set(ARDUINO_RULE_NAMES_LIST)
 	foreach(_rule_name_regex IN LISTS _rule_name_regex_list)
 		properties_get_list(ard_global "${_rule_name_regex}"
 			_rule_name_list)
+		# message("_rule_name_list:${_rule_name_list}")
 		foreach (_rule_name IN LISTS _rule_name_list)
 			list(APPEND ARDUINO_RULE_NAMES_LIST "${_rule_name}")
 			properties_get_value(ard_global "${_rule_name}"
@@ -778,7 +779,7 @@ endfunction()
 function (_find_system_program_path)
 
 	set(_rule_name_regex_list "^recipe\\..*\\.pattern$"
-		"^recipe\\..*\\.network_pattern$" "^tools\\..*\\.pattern$")
+		"^tools\\..*\\.network_pattern$" "^tools\\..*\\.pattern$")
 	set(ARDUINO_SYSTEM_PROGRAM_PATH)
 	foreach(_rule_name_regex IN LISTS _rule_name_regex_list)
 		set(_rule_name_list "${ARDUINO_RULE_NAMES_LIST}")

@@ -1,7 +1,8 @@
 # Copyright (c) 2020 Arduino CMake Toolchain
 
 message("################## Size Summary ##################")
-separate_arguments(cmd_pattern UNIX_COMMAND "${RECIPE_SIZE_PATTERN}")
+# separate_arguments(cmd_pattern UNIX_COMMAND "${RECIPE_SIZE_PATTERN}")
+set(cmd_pattern "${RECIPE_SIZE_PATTERN}")
 execute_process(COMMAND ${cmd_pattern} RESULT_VARIABLE result OUTPUT_VARIABLE SizeRecipeOutput)
 string(REPLACE "\n" ";" SizeRecipeOutput "${SizeRecipeOutput}")
 

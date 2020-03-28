@@ -281,9 +281,10 @@ function(target_enable_arduino_upload target)
 	# message("size_recipe_list:${size_recipe_list}")
 	foreach(size_recipe IN LISTS size_recipe_list)
 		# message("${size_recipe}:${${size_recipe}}")
+		separate_arguments(size_recipe_str UNIX_COMMAND "${${size_recipe}}")
 		add_custom_command(TARGET "${target}" POST_BUILD COMMAND
 			${CMAKE_COMMAND}
-			ARGS "-DRECIPE_SIZE_PATTERN=${${size_recipe}}"
+			ARGS "-DRECIPE_SIZE_PATTERN=${size_recipe_str}"
 			-P "${CMAKE_BINARY_DIR}/FirmwareSizePrint.cmake"
 			COMMENT "Calculating '${target}' size"
 			VERBATIM)
@@ -296,14 +297,27 @@ function(target_enable_arduino_upload target)
 			"^tools\\.${tool}\\.upload\\.pattern$" serial_upload_pattern)
 		arduino_board_get_target_cmd("${target}"
 			"^tools\\.${tool}\\.upload\\.network_pattern$" network_upload_pattern)
+
+		# Simplify certain long variables in the pattern
+		string(REPLACE "{upload.network." "{network." UPLOAD_NETWORK_PATTERN
+			"${UPLOAD_NETWORK_PATTERN}")
+
 		# message("${serial_upload_pattern}:${${serial_upload_pattern}}")
 		# message("${network_upload_pattern}:${${network_upload_pattern}}")
+		_get_def_env_options("${${serial_upload_pattern}}" _serial_defs)
+		_get_def_env_options("${${network_upload_pattern}}" _network_defs)
+		separate_arguments(serial_upload_pattern_str UNIX_COMMAND
+			"${${serial_upload_pattern}}")
+		separate_arguments(network_upload_pattern_str UNIX_COMMAND
+			"${${network_upload_pattern}}")
 		add_custom_target("upload-${target}" 
 			${CMAKE_COMMAND} 
 			ARGS "-DTARGET=${target}" "-DMAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
-				"-DCMAKE_VERBOSE_MAKEFILE=1"
-				"-DUPLOAD_SERIAL_PATTERN=${${serial_upload_pattern}}"
-				"-DUPLOAD_NETWORK_PATTERN=${${network_upload_pattern}}"
+				"-DCMAKE_VERBOSE_MAKEFILE=${CMAKE_VERBOSE_MAKEFILE}"
+				"-DUPLOAD_SERIAL_PATTERN=${serial_upload_pattern_str}"
+				"-DUPLOAD_NETWORK_PATTERN=${network_upload_pattern_str}"
+				${_serial_defs}
+				${_network_defs}
 			-P "${CMAKE_BINARY_DIR}/FirmwareUpload.cmake"
 			COMMENT "Uploading '${target}'"
 			VERBATIM)
@@ -317,12 +331,16 @@ function(target_enable_arduino_upload target)
 			"^tools\\.${tool}\\.program\\.pattern$" program_pattern)
 		if (program_pattern)
 			# message("${program_pattern}:${${program_pattern}}")
+			_get_def_env_options("${${program_pattern}}" _program_defs)
+			separate_arguments(program_pattern_str UNIX_COMMAND
+				"${${program_pattern}}")
 			add_custom_target("program-${target}"
 				${CMAKE_COMMAND}
 				ARGS "-DMAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
-					"-DCMAKE_VERBOSE_MAKEFILE=1"
-					"-DCONFIRM_RECIPE_PATTERN=${${program_pattern}}"
+					"-DCMAKE_VERBOSE_MAKEFILE=${CMAKE_VERBOSE_MAKEFILE}"
+					"-DCONFIRM_RECIPE_PATTERN=${program_pattern_str}"
 					"-DOPERATION=program-${target}"
+					${_program_defs}
 				-P "${CMAKE_BINARY_DIR}/ExecuteRecipe.cmake"
 				COMMENT "Programming '${target}'"
 				VERBATIM)
@@ -337,12 +355,16 @@ function(target_enable_arduino_upload target)
 			"^tools\\.${tool}\\.erase\\.pattern$" erase_pattern)
 		if (erase_pattern)
 			# message("${erase_pattern}:${${erase_pattern}}")
+			_get_def_env_options("${${erase_pattern}}" _erase_defs)
+			separate_arguments(erase_pattern_str UNIX_COMMAND
+				"${${erase_pattern}}")
 			add_custom_target("erase-flash" 
 				${CMAKE_COMMAND}
 				ARGS "-DMAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
-					"-DCMAKE_VERBOSE_MAKEFILE=1"
-					"-DCONFIRM_RECIPE_PATTERN=${${erase_pattern}}"
+					"-DCMAKE_VERBOSE_MAKEFILE=${CMAKE_VERBOSE_MAKEFILE}"
+					"-DCONFIRM_RECIPE_PATTERN=${erase_pattern_str}"
 					"-DOPERATION=erase-flash"
+					${_erase_defs}
 				-P "${CMAKE_BINARY_DIR}/ExecuteRecipe.cmake"
 				COMMENT "Erasing flash..."
 				VERBATIM)
@@ -356,12 +378,16 @@ function(target_enable_arduino_upload target)
 			"^tools\\.${tool}\\.bootloader\\.pattern$" bootloader_pattern)
 		if (bootloader_pattern)
 			# message("${bootloader_pattern}:${${bootloader_pattern}}")
+			_get_def_env_options("${${bootloader_pattern}}" _bootloader_defs)
+			separate_arguments(bootloader_pattern_str UNIX_COMMAND
+				"${${bootloader_pattern}}")
 			add_custom_target("burn-bootloader" 
 				${CMAKE_COMMAND}
 				ARGS "-DMAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
-					"-DCMAKE_VERBOSE_MAKEFILE=1"
-					"-DCONFIRM_RECIPE_PATTERN=${${bootloader_pattern}}"
+					"-DCMAKE_VERBOSE_MAKEFILE=${CMAKE_VERBOSE_MAKEFILE}"
+					"-DCONFIRM_RECIPE_PATTERN=${bootloader_pattern_str}"
 					"-DOPERATION=burn-bootloader"
+					${_bootloader_defs}
 				-P "${CMAKE_BINARY_DIR}/ExecuteRecipe.cmake"
 				COMMENT "Burning bootloader..."
 				VERBATIM)
@@ -897,5 +923,25 @@ function(_library_search_process lib search_paths_var search_suffixes_var return
 	endif()
 
 	set ("${return_var}" "${matched_lib_path}" PARENT_SCOPE)
+
+endfunction()
+
+function(_get_def_env_options str return_defs)
+
+	properties_resolve_value_env("${str}" _tmp_str _req_var_list
+		_opt_var_list _all_resolved)
+
+	set(_defs)
+	foreach(var_name IN LISTS _req_var_list _opt_var_list)
+		string(MAKE_C_IDENTIFIER "${var_name}" var_id)
+		string(TOUPPER "${var_id}" var_id)
+		if (DEFINED "${var_id}")
+			list(APPEND _defs "-D${var_id}=${${var_id}}")
+			set("${var_id}" "${${var_id}}" CACHE STRING
+				"Default value for ${var_id} used in upload scripts")
+		endif()
+	endforeach()
+
+	set("${return_defs}" "${_defs}" PARENT_SCOPE)
 
 endfunction()
