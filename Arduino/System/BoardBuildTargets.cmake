@@ -766,15 +766,37 @@ function(_add_internal_arduino_core target)
 	# filter this out
 	list_filter_exclude_regex(core_sources ".s$")
 
-	# get_headers_parent_directories("${core_headers};${variant_headers}" include_dirs)
+	if (NOT ${variant_sources} STREQUAL "" AND TRUE)
+		add_library("${target}_vsources_" OBJECT
+			${variant_headers}
+			${variant_sources})
+		target_include_directories("${target}_vsources_" PUBLIC
+			"${ARDUINO_BOARD_BUILD_VARIANT_PATH}"
+			"${ARDUINO_BOARD_BUILD_CORE_PATH}")
 
-	# Add the library and set the include directories
-	add_library("${target}" STATIC ${core_headers} ${core_sources}
-		${variant_headers} ${variant_sources})
-	# target_include_directories(${target} PUBLIC ${include_dirs})
-	target_include_directories(${target} PUBLIC
-		"${ARDUINO_BOARD_BUILD_CORE_PATH}"
-		"${ARDUINO_BOARD_BUILD_VARIANT_PATH}")
+		# Add the library and set the include directories
+		add_library("${target}" STATIC ${variant_headers}
+			${core_headers} ${core_sources})
+		# target_include_directories(${target} PUBLIC ${include_dirs})
+		target_include_directories(${target} PUBLIC
+			"${ARDUINO_BOARD_BUILD_VARIANT_PATH}"
+			"${ARDUINO_BOARD_BUILD_CORE_PATH}")
+
+		# Add the object library to the sources of the linking targets
+		# Should work above CMake 3.1, but GENERATED property does not seem
+		# to be working well causing the portable_app example (transitive
+		# linking o core) to not to link with this in the first run.
+		set_target_properties(${target} PROPERTIES
+			INTERFACE_SOURCES  "$<TARGET_OBJECTS:${target}_vsources_>")
+	else()
+		# Add the library and set the include directories
+		add_library("${target}" STATIC ${variant_headers}
+			${core_headers} ${core_sources})
+		# target_include_directories(${target} PUBLIC ${include_dirs})
+		target_include_directories(${target} PUBLIC
+			"${ARDUINO_BOARD_BUILD_VARIANT_PATH}"
+			"${ARDUINO_BOARD_BUILD_CORE_PATH}")
+	endif()
 
 	# Add the prebuild and postbuild command hooks for the core
 	_set_arduino_target_hooks("${target}" "core.prebuild" PRE_BUILD)
