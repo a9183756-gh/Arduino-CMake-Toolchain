@@ -766,15 +766,31 @@ function(_add_internal_arduino_core target)
 	# filter this out
 	list_filter_exclude_regex(core_sources ".s$")
 
-	# get_headers_parent_directories("${core_headers};${variant_headers}" include_dirs)
+	if (NOT ${variant_sources} STREQUAL "")
+		add_library("${target}" OBJECT ${variant_headers} ${variant_sources})
+		target_include_directories("${target}" PUBLIC
+			"${ARDUINO_BOARD_BUILD_VARIANT_PATH}"
+			"${ARDUINO_BOARD_BUILD_CORE_PATH}")
 
-	# Add the library and set the include directories
-	add_library("${target}" STATIC ${core_headers} ${core_sources}
-		${variant_headers} ${variant_sources})
-	# target_include_directories(${target} PUBLIC ${include_dirs})
-	target_include_directories(${target} PUBLIC
-		"${ARDUINO_BOARD_BUILD_CORE_PATH}"
-		"${ARDUINO_BOARD_BUILD_VARIANT_PATH}")
+		# Add the library and set the include directories
+		add_library("${target}_sources_" STATIC
+			${variant_headers} ${core_headers} ${core_sources})
+		# target_include_directories(${target} PUBLIC ${include_dirs})
+		target_include_directories("${target}_sources_" PUBLIC
+			"${ARDUINO_BOARD_BUILD_VARIANT_PATH}"
+			"${ARDUINO_BOARD_BUILD_CORE_PATH}")
+
+		target_link_libraries(${target} PUBLIC
+			"${target}_sources_")
+	else()
+		# Add the library and set the include directories
+		add_library("${target}" STATIC ${variant_headers}
+			${core_headers} ${core_sources})
+		# target_include_directories(${target} PUBLIC ${include_dirs})
+		target_include_directories(${target} PUBLIC
+			"${ARDUINO_BOARD_BUILD_VARIANT_PATH}"
+			"${ARDUINO_BOARD_BUILD_CORE_PATH}")
+	endif()
 
 	# Add the prebuild and postbuild command hooks for the core
 	_set_arduino_target_hooks("${target}" "core.prebuild" PRE_BUILD)
