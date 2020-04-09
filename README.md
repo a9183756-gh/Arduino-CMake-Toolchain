@@ -124,7 +124,7 @@ Currently there is no support available for this within this toolchain. However 
 
 ## Known issues
 
-**1. Uploaded application does not work on some boards**
+<font color="red">**1. Uploaded application does not work on some boards**</font>
 
 Caused by build linking issue that does not link some object files related to platform variant sources contained in the core library. Affects any Arduino platform that has variant source files in addition to the variant header files.
 
@@ -134,7 +134,7 @@ Resolution: Temporary fixes are available in the branches [fix/variant_link_alt1
 
 **Compromises when using the fix/variant_link_alt2 fix**: Need to retrigger cmake and do rebuild, after the first successful build, if transitive linking of core is used in the project. May get "source some_file.o not found error" in CMake during the first invocation of CMake that can be ignored.
 
-**2. Build/link not working on some 3rd party platforms**
+<font color="red">**2. Build/link issue on some 3rd party platforms**</font">
 
 Fix is WIP.
 
