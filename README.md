@@ -122,6 +122,22 @@ Using the programmer, bootloader can be flashed as below
 
 Currently there is no support available for this within this toolchain. However any external serial port monitor can be used (e.g. Putty). External serial monitor may need to be closed before upload and reopened after upload, because both use the same serial port.
 
+## Known issues
+
+**1. Uploaded application does not work on some boards**
+
+Caused by build linking issue that does not link some object files related to platform variant sources contained in the core library. Affects any Arduino platform that has variant source files in addition to the variant header files.
+
+Resolution: Temporary fixes are available in the branches [fix/variant_link_alt1](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/tree/fix/variant_link_alt1) and [fix/variant_link_alt2](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/tree/fix/variant_link_alt2).
+
+**Compromises when using the fix/variant_link_alt1 fix**: (1) CMake version must be above 3.13, (2) Application needs to link with core directly, like in [Examples/01_hello_world](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/tree/master/Examples/01_hello_world), and not like in [Examples/03_portable_app](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/tree/master/Examples/03_portable_app) which links transitively.
+
+**Compromises when using the fix/variant_link_alt2 fix**: Need to retrigger cmake and do rebuild, after the first successful build, if transitive linking of core is used in the project. May get "source some_file.o not found error" in CMake during the first invocation of CMake that can be ignored.
+
+**2. Build/link not working on some 3rd party platforms**
+
+Fix is WIP.
+
 ## How it works
 
 This toolchain follows the build process described in [Arduino Build Process](https://arduino.github.io/arduino-cli/sketch-build-process/), and processes the JSON, platform.txt and boards.txt files correponding to the Arduino platform as specified in the documentation [Arduino IDE 1.5 3rd party Hardware specification](https://arduino.github.io/arduino-cli/platform-specification/).
