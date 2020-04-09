@@ -31,14 +31,14 @@ My initial expectation was to contribute to Arduino-CMake-NG to fix the above li
 
 ## Usage
 
-The provided toolchain file (Arduino-Toolchain.cmake) is passed to cmake as folows
+The provided toolchain file (Arduino-toolchain.cmake) is passed to cmake as folows
 
 ```sh
 cmake -D CMAKE_TOOLCHAIN_FILE=/path/to/Arduino-toolchain.cmake <CMAKE_SOURCE_DIR>
 ```
 Note: As this is cross compilation, use any cross compilation compatible generator, like makefile generators (e.g. `-G "NMake Makefiles"` or `-G "MinGW Makefiles"` on Windows command prompt or `-G "Unix Makefiles"` on UNIX compatible prompts etc.).
 
-The above command generates a file BoardOptions.cmake in the build directory, that enumerates all the installed Arduino boards (installed through Arduino IDE or any other board manager) and their menu options. Select the Arduino board and any non-default options for the board from the BoardOptions.cmake (Or from cmake-gui), and then reinvoke the above command.
+The above command generates a file **BoardOptions.cmake** in the build directory, that enumerates all the installed Arduino boards (installed through Arduino IDE or any other board manager) and their menu options. Select the Arduino board and any non-default options for the board from the BoardOptions.cmake (Or from cmake-gui), and then reinvoke the same command above.
 
 If you already have a customized BoardOptions.cmake file for the Arduino Board, you can use that instead, without waiting for the generation of BoardOptions.cmake, as given below.
 
@@ -54,7 +54,7 @@ Note:
 
 ### Linking with Arduino code/libraries (`target_link_arduino_libraries`)
 
-`<CMAKE_SOURCE_DIR>/CMakeLists.txt` and any other dependent CMake scripts of the project contain the standard CMake scripting using `add_library`, `add_executable` etc. without Arduino specific changes. Refer to CMake documentation for the same. However when the project source code depends on the Arduino code or libraries (i.e. includes the corresponding header files), then appropriate linking is required, as expected. This is done using `target_link_arduino_libraries` as explained below.
+`<CMAKE_SOURCE_DIR>/CMakeLists.txt` and any other dependent CMake scripts of the project contain the standard CMake scripting using `add_library`, `add_executable` etc. without Arduino specific changes. Refer to CMake documentation for the same. However when the project source code depends on the Arduino code or libraries (i.e. if the corresponding header files are included), then appropriate linking is required, as expected. This is done using `target_link_arduino_libraries` as explained below.
 
 If Arduino.h is included in your source files, then the target must be linked against the 'core' Arduino library as follows.
 
