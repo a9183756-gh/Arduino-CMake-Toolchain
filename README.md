@@ -31,14 +31,14 @@ My initial expectation was to contribute to Arduino-CMake-NG to fix the above li
 
 ## Usage
 
-The provided toolchain file (Arduino-Toolchain.cmake) is passed to cmake as folows
+The provided toolchain file (Arduino-toolchain.cmake) is passed to cmake as folows
 
 ```sh
 cmake -D CMAKE_TOOLCHAIN_FILE=/path/to/Arduino-toolchain.cmake <CMAKE_SOURCE_DIR>
 ```
 Note: As this is cross compilation, use any cross compilation compatible generator, like makefile generators (e.g. `-G "NMake Makefiles"` or `-G "MinGW Makefiles"` on Windows command prompt or `-G "Unix Makefiles"` on UNIX compatible prompts etc.).
 
-The above command generates a file BoardOptions.cmake in the build directory, that enumerates all the installed Arduino boards (installed through Arduino IDE or any other board manager) and their menu options. Select the Arduino board and any non-default options for the board from the BoardOptions.cmake (Or from cmake-gui), and then reinvoke the above command.
+The above command generates a file **BoardOptions.cmake** in the build directory, that enumerates all the installed Arduino boards (installed through Arduino IDE or any other board manager) and their menu options. Select the Arduino board and any non-default options for the board from the BoardOptions.cmake (Or from cmake-gui), and then reinvoke the same command above.
 
 If you already have a customized BoardOptions.cmake file for the Arduino Board, you can use that instead, without waiting for the generation of BoardOptions.cmake, as given below.
 
@@ -54,7 +54,7 @@ Note:
 
 ### Linking with Arduino code/libraries (`target_link_arduino_libraries`)
 
-`<CMAKE_SOURCE_DIR>/CMakeLists.txt` and any other dependent CMake scripts of the project contain the standard CMake scripting using `add_library`, `add_executable` etc. without Arduino specific changes. Refer to CMake documentation for the same. However when the project source code depends on the Arduino code or libraries (i.e. includes the corresponding header files), then appropriate linking is required, as expected. This is done using `target_link_arduino_libraries` as explained below.
+`<CMAKE_SOURCE_DIR>/CMakeLists.txt` and any other dependent CMake scripts of the project contain the standard CMake scripting using `add_library`, `add_executable` etc. without Arduino specific changes. Refer to CMake documentation for the same. However when the project source code depends on the Arduino code or libraries (i.e. if the corresponding header files are included), then appropriate linking is required, as expected. This is done using `target_link_arduino_libraries` as explained below.
 
 If Arduino.h is included in your source files, then the target must be linked against the 'core' Arduino library as follows.
 
@@ -121,6 +121,22 @@ Using the programmer, bootloader can be flashed as below
 ## Serial port monitoring
 
 Currently there is no support available for this within this toolchain. However any external serial port monitor can be used (e.g. Putty). External serial monitor may need to be closed before upload and reopened after upload, because both use the same serial port.
+
+## Known issues
+
+**1. Uploaded application does not work on some boards**
+
+Caused by build linking issue that does not link some object files related to platform variant sources contained in the core library. Affects any Arduino platform that has variant source files in addition to the variant header files.
+
+Resolution: Temporary fixes are available in the branches [fix/variant_link_alt1](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/tree/fix/variant_link_alt1) and [fix/variant_link_alt2](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/tree/fix/variant_link_alt2).
+
+**Compromises when using the fix/variant_link_alt1 fix**: (1) CMake version must be above 3.13, (2) Application needs to link with core directly, like in [Examples/01_hello_world](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/tree/master/Examples/01_hello_world), and not like in [Examples/03_portable_app](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/tree/master/Examples/03_portable_app) which links transitively.
+
+**Compromises when using the fix/variant_link_alt2 fix**: Need to retrigger cmake and do rebuild, after the first successful build, if transitive linking of core is used in the project. May get "source some_file.o not found error" in CMake during the first invocation of CMake that can be ignored.
+
+**2. Build/link issue on some 3rd party platforms**
+
+Fix is WIP.
 
 ## How it works
 
