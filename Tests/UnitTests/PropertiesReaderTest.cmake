@@ -1,0 +1,37 @@
+cmake_policy(VERSION 3.0.0)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../..")
+set(ARDUINO_TOOLCHAIN_DIR "${CMAKE_CURRENT_LIST_DIR}/../..")
+
+include(Arduino/Utilities/PropertiesReader)
+
+properties_set_value(test_namespace "var_x" "value_x")
+properties_set_value(test_namespace "var_y" "value_y")
+properties_set_value(test_namespace "var_z2" "z2/{var_z1}")
+properties_set_value(test_namespace "var_z2r" "z2r/{var_z1r}")
+properties_set_value(test_namespace "var_z1r" "z1r/{var_z2r}")
+properties_set_value(test_namespace "var_z3" "z3/{var_z4}")
+properties_set_value(test_namespace "var_z1" "z1/x-{var_x},y-{var_y}")
+message("Printing all values")
+properties_print_all(test_namespace)
+properties_resolve_value("R {var_z2}" _value test_namespace UNRESOLVED_LIST
+	_unresolv)
+message("\"R {var_z2}\" => \"${_value}\"")
+message("_unresolv:${_unresolv}")
+message("Printing all values")
+properties_print_all(test_namespace)
+properties_resolve_value("R {var_z3}" _value test_namespace UNRESOLVED_LIST
+	_unresolv)
+message("\"R {var_z3}\" => \"${_value}\"")
+message("_unresolv:${_unresolv}")
+properties_set_value(test_namespace "var_z4" "value_z4+{unknown}")
+properties_resolve_value("R {var_z3}" _value test_namespace UNRESOLVED_LIST
+	_unresolv)
+message("\"R {var_z3}\" => \"${_value}\"")
+message("_unresolv:${_unresolv}")
+message("Printing all values")
+properties_print_all(test_namespace)
+message("Resolving all values")
+properties_resolve_all_values(test_namespace)
+message("Printing all values")
+properties_print_all(test_namespace)
+

@@ -1,0 +1,2 @@
+set(CTEST_CMAKE_GENERATOR "Unix Makefiles")
+include("${CTEST_SCRIPT_DIRECTORY}/RunTestsCommon.ctest")

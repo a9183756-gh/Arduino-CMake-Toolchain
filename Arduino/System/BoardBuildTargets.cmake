@@ -249,151 +249,111 @@ function(target_enable_arduino_upload target)
 	# TODO check if already set?
 	# Also validate if EXE target
 
-	# Add the prebuild, postbuild, prelink and postlink command hooks for the sketch
-	_set_arduino_target_hooks("${target}" "sketch.prebuild" PRE_BUILD)
-	_set_arduino_target_hooks("${target}" "sketch.postbuild;linking.prelink"
-		PRE_LINK) # Yes, as per order
-	_set_arduino_target_hooks("${target}" "linking.postlink;objcopy.preobjcopy"
-		POST_BUILD) # Yes, as per order
+	# Directory containing the generated scripts, target binary, sources
+	set(_scripts_dir "${ARDUINO_GENERATE_DIR}/.scripts")
+	set(_app_targets_dir "${CMAKE_BINARY_DIR}/.app_targets")
+	set(_bin_dir "$<TARGET_PROPERTY:${target},BINARY_DIR>")
+	set(_src_dir "$<TARGET_PROPERTY:${target},SOURCE_DIR>")
 
-	# Set image generation as a post build event
-	arduino_board_get_target_cmd("${target}" "^recipe\\.objcopy\\..*\\.pattern$"
-		objcopy_list)
-	# message("objcopy_list:${objcopy_list}")
-	foreach(objcopy IN LISTS objcopy_list)
-		# message("${objcopy}:${${objcopy}}")
-		string(REGEX MATCH "^recipe\\.objcopy\\.(.*)\\.pattern" match
-			"${objcopy}")
-		string(TOUPPER "${CMAKE_MATCH_1}" file_ext)
-		separate_arguments(cmd_with_args_list UNIX_COMMAND "${${objcopy}}")
-		add_custom_command(TARGET "${target}" POST_BUILD COMMAND
-			${cmd_with_args_list}
-			COMMENT "Generating ${file_ext} image"
-			VERBATIM)
-	endforeach()
+	# Generate content that will be used later by link/tool scripts
+	set(_app_info
+		"set(ARDUINO_BUILD_SOURCE_PATH \"${_src_dir}\")\n")
+	set(_app_info
+		"${_app_info}set(ARDUINO_BUILD_PATH \"${_bin_dir}\")\n")
+	set(_app_info
+		"${_app_info}set(ARDUINO_BUILD_PROJECT_NAME \"${target}\")\n")
+	file(GENERATE OUTPUT "${_app_targets_dir}/${target}.cmake" CONTENT
+		"${_app_info}")
 
-	_set_arduino_target_hooks("${target}" "objcopy.postobjcopy"
-		POST_BUILD) # Yes, as per order
-
-	# Post build event for size calculation
-	arduino_board_get_target_cmd("${target}" "^recipe\\.size\\.pattern$"
-		size_recipe_list)
-	# message("size_recipe_list:${size_recipe_list}")
-	foreach(size_recipe IN LISTS size_recipe_list)
-		# message("${size_recipe}:${${size_recipe}}")
-		separate_arguments(size_recipe_str UNIX_COMMAND "${${size_recipe}}")
-		add_custom_command(TARGET "${target}" POST_BUILD COMMAND
-			${CMAKE_COMMAND}
-			ARGS "-DRECIPE_SIZE_PATTERN=${size_recipe_str}"
-			-P "${CMAKE_BINARY_DIR}/FirmwareSizePrint.cmake"
-			COMMENT "Calculating '${target}' size"
-			VERBATIM)
-	endforeach()
-
-	# upload target as a custom target upload-<target>
-	set(tool "${ARDUINO_BOARD_UPLOAD_TOOL}")
-	if (tool)
-		arduino_board_get_target_cmd("${target}"
-			"^tools\\.${tool}\\.upload\\.pattern$" serial_upload_pattern)
-		arduino_board_get_target_cmd("${target}"
-			"^tools\\.${tool}\\.upload\\.network_pattern$" network_upload_pattern)
-
-		# Simplify certain long variables in the pattern
-		string(REPLACE "{upload.network." "{network." UPLOAD_NETWORK_PATTERN
-			"${UPLOAD_NETWORK_PATTERN}")
-
-		# message("${serial_upload_pattern}:${${serial_upload_pattern}}")
-		# message("${network_upload_pattern}:${${network_upload_pattern}}")
-		_get_def_env_options("${${serial_upload_pattern}}" _serial_defs)
-		_get_def_env_options("${${network_upload_pattern}}" _network_defs)
-		separate_arguments(serial_upload_pattern_str UNIX_COMMAND
-			"${${serial_upload_pattern}}")
-		separate_arguments(network_upload_pattern_str UNIX_COMMAND
-			"${${network_upload_pattern}}")
-		add_custom_target("upload-${target}" 
-			${CMAKE_COMMAND} 
-			ARGS "-DTARGET=${target}" "-DMAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
-				"-DCMAKE_VERBOSE_MAKEFILE=${CMAKE_VERBOSE_MAKEFILE}"
-				"-DUPLOAD_SERIAL_PATTERN=${serial_upload_pattern_str}"
-				"-DUPLOAD_NETWORK_PATTERN=${network_upload_pattern_str}"
-				${_serial_defs}
-				${_network_defs}
-			-P "${CMAKE_BINARY_DIR}/FirmwareUpload.cmake"
-			COMMENT "Uploading '${target}'"
-			VERBATIM)
-		add_dependencies("upload-${target}" "${target}")
+	# Some platforms generate source files that needs to be linked with the
+	# application target. Currently we do it here, but may later be moved
+	# to target_link_arduino_libraries(core)
+	find_source_files("${ARDUINO_GENERATE_DIR}/sketch" app_sources RECURSE)
+	if (NOT "${app_sources}" EQUAL "")
+		target_sources("${target}" PRIVATE "${app_sources}")
+		target_link_arduino_libraries("${target}" AUTO_PRIVATE "${app_sources}")
 	endif()
 
-	# program target as a custom target program-<target>
-	set(tool "${ARDUINO_BOARD_PROGRAM_TOOL}")
-	if (ARDUINO_PROGRAMMER_ID AND tool)
-		arduino_board_get_target_cmd("${target}"
-			"^tools\\.${tool}\\.program\\.pattern$" program_pattern)
-		if (program_pattern)
-			# message("${program_pattern}:${${program_pattern}}")
-			_get_def_env_options("${${program_pattern}}" _program_defs)
-			separate_arguments(program_pattern_str UNIX_COMMAND
-				"${${program_pattern}}")
-			add_custom_target("program-${target}"
-				${CMAKE_COMMAND}
-				ARGS "-DMAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
-					"-DCMAKE_VERBOSE_MAKEFILE=${CMAKE_VERBOSE_MAKEFILE}"
-					"-DCONFIRM_RECIPE_PATTERN=${program_pattern_str}"
-					"-DOPERATION=program-${target}"
-					${_program_defs}
-				-P "${CMAKE_BINARY_DIR}/ExecuteRecipe.cmake"
-				COMMENT "Programming '${target}'"
-				VERBATIM)
-			add_dependencies("program-${target}" "${target}")
-		endif()
-	endif()
-
-	# erase target as a custom target erase-<target>
-	set(tool "${ARDUINO_BOARD_PROGRAM_TOOL}")
-	if (ARDUINO_PROGRAMMER_ID AND tool AND NOT TARGET erase-flash)
-		arduino_board_get_target_cmd(""
-			"^tools\\.${tool}\\.erase\\.pattern$" erase_pattern)
-		if (erase_pattern)
-			# message("${erase_pattern}:${${erase_pattern}}")
-			_get_def_env_options("${${erase_pattern}}" _erase_defs)
-			separate_arguments(erase_pattern_str UNIX_COMMAND
-				"${${erase_pattern}}")
-			add_custom_target("erase-flash" 
-				${CMAKE_COMMAND}
-				ARGS "-DMAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
-					"-DCMAKE_VERBOSE_MAKEFILE=${CMAKE_VERBOSE_MAKEFILE}"
-					"-DCONFIRM_RECIPE_PATTERN=${erase_pattern_str}"
-					"-DOPERATION=erase-flash"
-					${_erase_defs}
-				-P "${CMAKE_BINARY_DIR}/ExecuteRecipe.cmake"
-				COMMENT "Erasing flash..."
+	# Add build rules: pre-build, pre-link, post-build, objcopy, size etc.
+	set(_build_rule_list
+		"PreBuildScript.cmake" PRE_BUILD
+			"Executing PRE_LINK hooks for '${target}'"
+		"PreLinkScript.cmake" PRE_LINK
+			"Executing PRE_LINK hooks for '${target}'"
+		"PostBuildScript.cmake" POST_BUILD
+			"Executing POST_BUILD hooks for '${target}'"
+		"ObjCopyScript.cmake" POST_BUILD
+			"Generating upload image for '${target}'"
+		"SizeScript.cmake" POST_BUILD
+			"Calculating '${target}' size")
+	list(LENGTH _build_rule_list _num_rules)
+	set(_idx 0)
+	while(_idx LESS _num_rules)
+		list(GET _build_rule_list "${_idx}" _script)
+		math(EXPR _idx "${_idx}+1")
+		list(GET _build_rule_list "${_idx}" _type)
+		math(EXPR _idx "${_idx}+1")
+		list(GET _build_rule_list "${_idx}" _comment)
+		math(EXPR _idx "${_idx}+1")
+		if (EXISTS "${_scripts_dir}/${_script}")
+			add_custom_command(TARGET "${target}" ${_type}
+				COMMAND ${CMAKE_COMMAND} ARGS
+					-D "ARDUINO_BUILD_PATH=${_bin_dir}"
+					-D "ARDUINO_BUILD_SOURCE_PATH=${_src_dir}"
+					-D "ARDUINO_BUILD_PROJECT_NAME=${target}"
+				-P "${_scripts_dir}/${_script}"
+				COMMENT "${_comment}"
 				VERBATIM)
 		endif()
-	endif()
+	endwhile()
 
-	# Burn bootloader target as a custom target burn-bootloader
-	set(tool "${ARDUINO_BOARD_BOOTLOADER_TOOL}")
-	if (ARDUINO_PROGRAMMER_ID AND tool AND NOT TARGET burn-bootloader)
-		arduino_board_get_target_cmd("" 
-			"^tools\\.${tool}\\.bootloader\\.pattern$" bootloader_pattern)
-		if (bootloader_pattern)
-			# message("${bootloader_pattern}:${${bootloader_pattern}}")
-			_get_def_env_options("${${bootloader_pattern}}" _bootloader_defs)
-			separate_arguments(bootloader_pattern_str UNIX_COMMAND
-				"${${bootloader_pattern}}")
-			add_custom_target("burn-bootloader" 
-				${CMAKE_COMMAND}
-				ARGS "-DMAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
-					"-DCMAKE_VERBOSE_MAKEFILE=${CMAKE_VERBOSE_MAKEFILE}"
-					"-DCONFIRM_RECIPE_PATTERN=${bootloader_pattern_str}"
-					"-DOPERATION=burn-bootloader"
-					${_bootloader_defs}
-				-P "${CMAKE_BINARY_DIR}/ExecuteRecipe.cmake"
-				COMMENT "Burning bootloader..."
+	# Add tool commands: upload, upload-network, program, erase-flash,
+	# burn-bootloader, debug etc.
+	set(_tool_script_list
+		"upload" "Uploading" TRUE
+		"upload-network" "Remote provisioning" TRUE
+		"program" "Programming" TRUE
+		"erase-flash" "Erasing flash" FALSE
+		"burn-bootloader" "Burning bootloader" FALSE
+		"debug" "Debugging" TRUE)
+	list(LENGTH _tool_script_list _num_tools)
+	set(_idx 0)
+	while(_idx LESS _num_tools)
+		list(GET _tool_script_list "${_idx}" _tool_target)
+		math(EXPR _idx "${_idx}+1")
+		set(_script "${_tool_target}.cmake")
+		list(GET _tool_script_list "${_idx}" _comment)
+		math(EXPR _idx "${_idx}+1")
+		list(GET _tool_script_list "${_idx}" _is_target_specific)
+		math(EXPR _idx "${_idx}+1")
+		if (EXISTS "${_scripts_dir}/${_script}")
+			if (NOT TARGET ${_tool_target})
+				add_custom_target("${_tool_target}"
+					${CMAKE_COMMAND} ARGS
+						-D "ARDUINO_BINARY_DIR=${CMAKE_BINARY_DIR}"
+						-D "MAKE_TARGET=${_tool_target}"
+						-P "${_scripts_dir}/${_script}"
+					COMMENT "${_comment}"
+					WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+					VERBATIM)
+			endif()
+			if (NOT _is_target_specific)
+				continue()
+			endif()
+			if (NOT "${ARDUINO_LEGACY_TOOL_TARGETS}")
+				continue()
+			endif()
+			add_custom_target("${_tool_target}-${target}"
+				${CMAKE_COMMAND} ARGS
+					-D "ARDUINO_BUILD_PATH=${_bin_dir}"
+					-D "ARDUINO_BUILD_SOURCE_PATH=${_src_dir}"
+					-D "ARDUINO_BUILD_PROJECT_NAME=${target}"
+					-D "MAKE_TARGET=${_tool_target}"
+					-P "${_scripts_dir}/${_script}"
+				COMMENT "${_comment} ${target}"
 				VERBATIM)
 		endif()
-	endif()
-
+	endwhile()
 endfunction()
 
 #==============================================================================
@@ -440,6 +400,7 @@ function(find_arduino_library lib return_lib_path)
 			"${CMAKE_CURRENT_SOURCE_DIR}"
 			"${CMAKE_SOURCE_DIR}"
 			${ARDUINO_LIBRARIES_SEARCH_PATHS_EXTRA}
+			${ARDUINO_PACKAGE_MANAGER_PATH}
 			${ARDUINO_SKETCHBOOK_PATH}
 			${ARDUINO_BOARD_RUNTIME_PLATFORM_PATH}
 			${ARDUINO_CORE_SPECIFIC_PLATFORM_PATH}
@@ -564,30 +525,6 @@ endfunction()
 SET(ARDUINO_LIBRARIES_SEARCH_PATHS_EXTRA "" CACHE PATH
 	"Paths to search for Arduino libraries in addition to standard paths"
 )
-
-# Set pre/post build command on the target from the given command hooks of the
-# board
-function(_set_arduino_target_hooks target hook_id_list hook_type)
-
-	# Add the given hooks for the target
-	set(_regex_list)
-	foreach(_hook_id IN LISTS hook_id_list)
-		string(REPLACE "." "\\." _regex "^recipe.hooks.${_hook_id}.[0-9]+.pattern$")
-		list(APPEND _regex_list "${_regex}")
-	endforeach()
-
-	#message("${_regex_list}")
-	arduino_board_get_target_cmd("${target}" "${_regex_list}" hooks_list)
-	#message("hooks_list:${hooks_list}")
-	foreach(hook IN LISTS hooks_list)
-		# message("${hook}:${${hook}}")
-		separate_arguments(cmd_with_args_list UNIX_COMMAND "${${hook}}")
-		add_custom_command(TARGET "${target}" ${hook_type} COMMAND ${cmd_with_args_list}
-			COMMENT "Executing ${hook} hook"
-			VERBATIM)
-	endforeach()
-
-endfunction()
 
 # Get the arduino libraries that are included by the given target
 # or source list
@@ -740,10 +677,6 @@ function(_add_internal_arduino_library target lib)
 	# message("\"${include_dirs}\"")
 	target_include_directories(${target} PUBLIC ${include_dirs})
 
-	# Add the prebuild and postbuild command hooks for the library
-	_set_arduino_target_hooks("${target}" "libraries.prebuild" PRE_BUILD)
-	_set_arduino_target_hooks("${target}" "libraries.postbuild" POST_BUILD)
-
 	# Add ARDUINO_LIB property
 	set_target_properties("${target}" PROPERTIES ARDUINO_LIB "${lib}")
 
@@ -762,23 +695,58 @@ function(_add_internal_arduino_core target)
 	# find_header_files("${ARDUINO_BOARD_BUILD_CORE_PATH}" core_headers)
 	# find_header_files("${ARDUINO_BOARD_BUILD_VARIANT_PATH}" variant_headers)
 
-	# On some platforms, files ending with small case .s not taken and cause issues
-	# filter this out
-	list_filter_exclude_regex(core_sources ".s$")
-
-	# get_headers_parent_directories("${core_headers};${variant_headers}" include_dirs)
+	# On some platforms, files ending with small case .s and .cxx are not taken
+	# and cause issues filter this out
+	list_filter_exclude_regex(core_sources "(.s|.[cC][xX][xX])$")
 
 	# Add the library and set the include directories
-	add_library("${target}" STATIC ${core_headers} ${core_sources}
-		${variant_headers} ${variant_sources})
-	# target_include_directories(${target} PUBLIC ${include_dirs})
-	target_include_directories(${target} PUBLIC
+	# message("${target}:${lib_sources}:\n${lib_headers}")
+	if ("${core_sources}" STREQUAL "")
+		# Could have added INTERFACE library, but due to CMake limitation
+		# of not able to set a property to INTERFACE targets, we have the
+		# following workaround of adding a dummy source file
+		configure_file(
+			${ARDUINO_TOOLCHAIN_DIR}/Arduino/Templates/DummySource.cpp.in
+			${CMAKE_CURRENT_BINARY_DIR}/${target}_dummy.cpp
+		)
+		set(core_sources "${CMAKE_CURRENT_BINARY_DIR}/${target}_dummy.cpp")
+	endif()
+
+	# Add core sources as an object library
+	add_library("${target}_cobjects_" OBJECT
+		${core_headers}
+		${core_sources})
+	target_include_directories("${target}_cobjects_" PRIVATE
+		"${ARDUINO_BOARD_BUILD_CORE_PATH}"
+		"${ARDUINO_BOARD_BUILD_VARIANT_PATH}")
+	set(_cobjects_ "$<TARGET_OBJECTS:${target}_cobjects_>")
+
+	set(_vobjects_)
+	if (NOT "${variant_sources}" STREQUAL "")
+		add_library("${target}_vobjects_" OBJECT
+			${variant_headers}
+			${variant_sources})
+		target_include_directories("${target}_vobjects_" PRIVATE
+			"${ARDUINO_BOARD_BUILD_CORE_PATH}"
+			"${ARDUINO_BOARD_BUILD_VARIANT_PATH}")
+		set(_vobjects_ "$<TARGET_OBJECTS:${target}_vobjects_>")
+	endif()
+
+	add_library("${target}" 
+		$<TARGET_OBJECTS:${target}_cobjects_>)
+	if (NOT "${_vobjects_}" STREQUAL "")
+		add_dependencies("${target}" "${target}_vobjects_")
+	endif()
+	
+	target_include_directories("${target}" INTERFACE
 		"${ARDUINO_BOARD_BUILD_CORE_PATH}"
 		"${ARDUINO_BOARD_BUILD_VARIANT_PATH}")
 
-	# Add the prebuild and postbuild command hooks for the core
-	_set_arduino_target_hooks("${target}" "core.prebuild" PRE_BUILD)
-	_set_arduino_target_hooks("${target}" "core.postbuild" POST_BUILD)
+	set(_gen_content "
+		set(ARDUINO_CORE_OBJECTS \"${_cobjects_}\")
+		set(ARDUINO_VARIANT_OBJECTS \"${_vobjects_}\")")
+	file(GENERATE OUTPUT "$<TARGET_FILE:${target}>.ard_core_info"
+		CONTENT "${_gen_content}")
 
 	# Add ARDUINO_LIB property
 	set_target_properties("${target}" PROPERTIES ARDUINO_LIB "core")
@@ -817,6 +785,7 @@ function(_find_linked_arduino_libs target_name ret_list_var)
 	set("${ret_list_var}" "${_ret_list}" PARENT_SCOPE)
 endfunction()
 
+# Search logic for Arduino libraries
 function(_library_search_process lib search_paths_var search_suffixes_var return_var)
 
 	# message("Searching for ${lib}...")
@@ -923,25 +892,5 @@ function(_library_search_process lib search_paths_var search_suffixes_var return
 	endif()
 
 	set ("${return_var}" "${matched_lib_path}" PARENT_SCOPE)
-
-endfunction()
-
-function(_get_def_env_options str return_defs)
-
-	properties_resolve_value_env("${str}" _tmp_str _req_var_list
-		_opt_var_list _all_resolved)
-
-	set(_defs)
-	foreach(var_name IN LISTS _req_var_list _opt_var_list)
-		string(MAKE_C_IDENTIFIER "${var_name}" var_id)
-		string(TOUPPER "${var_id}" var_id)
-		if (DEFINED "${var_id}")
-			list(APPEND _defs "-D${var_id}=${${var_id}}")
-			set("${var_id}" "${${var_id}}" CACHE STRING
-				"Default value for ${var_id} used in upload scripts")
-		endif()
-	endforeach()
-
-	set("${return_defs}" "${_defs}" PARENT_SCOPE)
 
 endfunction()

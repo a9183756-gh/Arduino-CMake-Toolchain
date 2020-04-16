@@ -1,0 +1,4 @@
+# List of supported Arduino boards
+
+| Platform | Boards | Upload | Remote provisioning | ISP | Debug |
+|----------|--------|--------|---------------------|-----|-------|

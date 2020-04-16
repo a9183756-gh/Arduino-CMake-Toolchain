@@ -1,0 +1,1 @@
+**&#x2717;** ~~@_ARDUINO_BOARD_NAME@ \[@_ARDUINO_BOARD_DISTINCT_ID@\]~~ \[[options](Tests/Results/@test_id@/@ARDUINO_BOARD_DISTINCT_ID@/BoardOptions.cmake)\] \[[known external issue](Tests/Results/@test_id@/@ARDUINO_BOARD_DISTINCT_ID@/error_log.txt)\]<br/>

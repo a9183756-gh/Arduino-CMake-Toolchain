@@ -67,12 +67,12 @@ function(InitializeArduinoPackagePathList)
 			NO_DEFAULT_PATH
 			NO_CMAKE_FIND_ROOT_PATH
 			DOC "Path to Arduino IDE installation")
-	if (NOT ARDUINO_INSTALL_PATH)
-		message(FATAL_ERROR "Arduino IDE installation is not found!!!\n"
-			"Use -DARDUINO_INSTALL_PATH=<path> to manually specify the path\n"
-		)
-	endif()
 	# message("ARDUINO_INSTALL_PATH:${ARDUINO_INSTALL_PATH}")
+	if (NOT ARDUINO_INSTALL_PATH AND NOT "${ARDUINO_ENABLE_PACKAGE_MANAGER}")
+		message(FATAL_ERROR "Arduino IDE installation is not found!!!\n"
+			"Use -DARDUINO_INSTALL_PATH=<path> to manually specify the path (OR)\n"
+			"Use -DARDUINO_BOARD=<board_id> to try downloading the board\n")
+	endif()
 
 	# Search for Arduino library path
 	find_path(ARDUINO_PACKAGE_PATH
@@ -103,5 +103,19 @@ function(InitializeArduinoPackagePathList)
 		endif()
 	endif()
 	# message("ARDUINO_SKETCHBOOK_PATH:${ARDUINO_SKETCHBOOK_PATH}")
+
+	# Arduino local package management path
+	if (NOT ARDUINO_PACKAGE_MANAGER_PATH)
+		set(ARDUINO_PACKAGE_MANAGER_PATH
+			"${CMAKE_BINARY_DIR}/_pkg_mgr")
+	endif()
+	set(ARDUINO_PACKAGE_MANAGER_PATH "${ARDUINO_PACKAGE_MANAGER_PATH}"
+		CACHE PATH "Path to local installed packages")
+	if (NOT ARDUINO_PKG_MGR_DL_CACHE)
+		set(ARDUINO_PKG_MGR_DL_CACHE
+			"${ARDUINO_PACKAGE_MANAGER_PATH}/downloads")
+	endif()
+	set(ARDUINO_PKG_MGR_DL_CACHE "${ARDUINO_PKG_MGR_DL_CACHE}"
+        CACHE PATH "Path to package manager downloads")
 
 endfunction()

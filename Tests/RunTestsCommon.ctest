@@ -1,0 +1,126 @@
+cmake_minimum_required(VERSION 3.0.0)
+
+set(dashboard_user_home "$ENV{HOME}")
+
+# Host description
+if(NOT CTEST_SITE)
+	cmake_host_system_information(RESULT hostname QUERY HOSTNAME)
+	cmake_host_system_information(RESULT osname QUERY OS_NAME)
+	cmake_host_system_information(RESULT osrelease QUERY OS_RELEASE)
+	cmake_host_system_information(RESULT osversion QUERY OS_VERSION)
+	cmake_host_system_information(RESULT osplatform QUERY OS_PLATFORM)
+	set(CTEST_SITE "${hostname}, ${osname}, ${osrelease}, ${osplatform}")
+endif()
+
+set(test_name "installation_test")
+
+set(_config_args)
+if (DEFINED ARDUINO_BOARD_MANAGER_URL)
+	list(APPEND ARDUINO_BOARD_MANAGER_REF_URL
+		"https://downloads.arduino.cc/packages/package_index.json")
+	string(REPLACE "," ";" _url_list "${ARDUINO_BOARD_MANAGER_URL}")
+	list(GET _url_list 0 _url)
+	get_filename_component(test_name "${_url}" NAME)
+	string(REGEX REPLACE "\\.[^.]*$" "" test_name "${test_name}")
+	string(MAKE_C_IDENTIFIER "${test_name}" test_name)
+	list(APPEND _config_args
+		"-DARDUINO_BOARD_MANAGER_URL=${ARDUINO_BOARD_MANAGER_URL}"
+		"-DARDUINO_NO_INSTALLED_PLATFORMS=1"
+	)
+endif()
+
+if (DEFINED ARDUINO_BOARD_MANAGER_REF_URL)
+	list(APPEND _config_args
+		"-DARDUINO_BOARD_MANAGER_REF_URL=${ARDUINO_BOARD_MANAGER_REF_URL}"
+	)
+endif()
+
+if (DEFINED ARDUINO_NO_INSTALLED_REFERENCES)
+	list(APPEND _config_args
+		"-DARDUINO_NO_INSTALLED_REFERENCES=${ARDUINO_NO_INSTALLED_REFERENCES}"
+	)
+endif()
+if (DEFINED ARDUINO_BOARD)
+	string(MAKE_C_IDENTIFIER "${ARDUINO_BOARD}" test_name)
+	list(APPEND _config_args "-DARDUINO_BOARD=${ARDUINO_BOARD}")
+endif()
+if (DEFINED ARDUINO_PLATFORM)
+	string(MAKE_C_IDENTIFIER "${ARDUINO_PLATFORM}" test_name)
+	list(APPEND _config_args "-DARDUINO_PLATFORM=${ARDUINO_PLATFORM}")
+endif()
+
+if (DEFINED ARDUINO_PKG_MGR_DL_CACHE)
+	list(APPEND _config_args
+		"-DARDUINO_PKG_MGR_DL_CACHE=${ARDUINO_PKG_MGR_DL_CACHE}")
+endif()
+
+if (DEFINED ARDUINO_ENABLE_PACKAGE_MANAGER)
+	list(APPEND _config_args
+		"-DARDUINO_ENABLE_PACKAGE_MANAGER=${ARDUINO_ENABLE_PACKAGE_MANAGER}")
+endif()
+
+message("_config_args:${_config_args}")
+message("test_name:${test_name}")
+
+# Build name (for cdash)
+if(NOT CTEST_BUILD_NAME)
+	set(CTEST_BUILD_NAME "${test_name}")
+endif()
+
+if(NOT CTEST_TEST_TIMEOUT)
+	set(CTEST_TEST_TIMEOUT 3000)
+endif()
+
+# Select the top dashboard directory.
+if(NOT DEFINED dashboard_root_name)
+	set(dashboard_root_name "")
+endif()
+if(NOT DEFINED CTEST_DASHBOARD_ROOT)
+	get_filename_component(CTEST_DASHBOARD_ROOT
+		"${CTEST_SCRIPT_DIRECTORY}/.." ABSOLUTE)
+endif()
+
+# Select the model (Nightly, Experimental, Continuous).
+if(NOT DEFINED dashboard_model)
+	set(dashboard_model Experimental)
+endif()
+if(NOT "${dashboard_model}" MATCHES "^(Nightly|Experimental|Continuous)$")
+	message(FATAL_ERROR "dashboard_model must be Nightly, Experimental, or Continuous")
+endif()
+
+# Default to a Debug build.
+if(NOT DEFINED CTEST_BUILD_CONFIGURATION)
+	set(CTEST_BUILD_CONFIGURATION Debug)
+endif()
+
+# Choose CTest reporting mode.
+if(NOT "${CTEST_CMAKE_GENERATOR}" MATCHES "Make|Ninja")
+  # Launchers work only with Makefile and Ninja generators.
+  set(CTEST_USE_LAUNCHERS 0)
+elseif(NOT DEFINED CTEST_USE_LAUNCHERS)
+  set(CTEST_USE_LAUNCHERS 1)
+endif()
+
+# Select a source directory name.
+if(NOT DEFINED CTEST_SOURCE_DIRECTORY)
+	set(CTEST_SOURCE_DIRECTORY ${CTEST_DASHBOARD_ROOT}/Tests)
+endif()
+
+# Select a build directory name.
+if(NOT DEFINED CTEST_BINARY_DIRECTORY)
+	set(CTEST_BINARY_DIRECTORY ${CTEST_DASHBOARD_ROOT}/Tests-build)
+endif()
+
+if(EXISTS "${CTEST_BINARY_DIRECTORY}" AND
+    NOT "${CTEST_SOURCE_DIRECTORY}" STREQUAL "${CTEST_BINARY_DIRECTORY}")
+  message("Clearing build tree...")
+  ctest_empty_binary_directory(${CTEST_BINARY_DIRECTORY})
+endif()
+file(MAKE_DIRECTORY "${CTEST_BINARY_DIRECTORY}")
+
+ctest_start(${dashboard_model})
+ctest_configure(OPTIONS "${_config_args}")
+ctest_read_custom_files(${CTEST_BINARY_DIRECTORY})
+ctest_build()
+ctest_test()
+ctest_submit()

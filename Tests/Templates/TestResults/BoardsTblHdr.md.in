@@ -1,0 +1,14 @@
+## **@pl_name@** *from @pkg_maint@*
+
+**Version**: @pl_version@<br/>
+**Architecture**: @pl_arch@<br/>
+**Board Manager URL**: [@pkg_url@](@_pkg_url@)<br/>
+**WebsiteURL**: [@web_url@](@web_url@)<br/>
+**Online Help**: [@help_url@](@help_url@)<br/>
+**E-Mail**: [@e_mail@](@_e_mail@)<br/>
+**Installer**: [@installer_url@](@installer_url@)<br/>
+
+### Results: @test_result@
+
+| Board | Result | Logs |
+|-------|--------|------|

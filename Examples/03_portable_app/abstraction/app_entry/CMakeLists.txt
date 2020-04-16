@@ -8,7 +8,6 @@ INTERFACE
 if (ARDUINO)
 
 	# Linking with core library is required for the setup/loop entry points
-
 	target_link_arduino_libraries(app_entry
 	INTERFACE
 		core

@@ -1,9 +1,30 @@
 # Copyright (c) 2020 Arduino CMake Toolchain
 
-message("################## Size Summary ##################")
-# separate_arguments(cmd_pattern UNIX_COMMAND "${RECIPE_SIZE_PATTERN}")
+# Generated content from the selected board
+set(RECIPE_SIZE_PATTERN "@RECIPE_SIZE_PATTERN@")
+
+# Resolve the target specific values
 set(cmd_pattern "${RECIPE_SIZE_PATTERN}")
-execute_process(COMMAND ${cmd_pattern} RESULT_VARIABLE result OUTPUT_VARIABLE SizeRecipeOutput)
+string(REPLACE "{build.project_name}" "${ARDUINO_BUILD_PROJECT_NAME}"
+	cmd_pattern "${cmd_pattern}")
+string(REPLACE "{build.path}" "${ARDUINO_BUILD_PATH}"
+	cmd_pattern "${cmd_pattern}")
+string(REPLACE "{build.source.path}" "${ARDUINO_BUILD_SOURCE_PATH}"
+	cmd_pattern "${cmd_pattern}")
+
+if ("${ARDUINO_BUILD_PATH}" STREQUAL "")
+	message(FATAL_ERROR "Script not allowed to be invoked directly!!!")
+endif()
+
+# Print the command line for VERBOSE mode
+if (CMAKE_VERBOSE_MAKEFILE OR DEFINED ENV{VERBOSE})
+	execute_process(COMMAND ${CMAKE_COMMAND} -E echo "${cmd_pattern}")
+endif()
+
+message("################## Size Summary ##################")
+separate_arguments(_pattern UNIX_COMMAND "${cmd_pattern}")
+execute_process(COMMAND ${_pattern} RESULT_VARIABLE result 
+	OUTPUT_VARIABLE SizeRecipeOutput)
 string(REPLACE "\n" ";" SizeRecipeOutput "${SizeRecipeOutput}")
 
 set (size_regex_list "@SIZE_REGEX_LIST@")
@@ -25,7 +46,7 @@ foreach(idx RANGE "${_last_index}")
 	foreach(line IN LISTS SizeRecipeOutput)
     	string(REGEX MATCH "${size_regex}" match "${line}")
 	    if (match)
-    	    math(EXPR tot_size "${tot_size} + ${CMAKE_MATCH_${size_match_idx}}")
+    	    math(EXPR tot_size "${tot_size}+${CMAKE_MATCH_${size_match_idx}}")
     	endif()
 	endforeach()
 
@@ -39,7 +60,8 @@ foreach(idx RANGE "${_last_index}")
 	# Print total size of the element
 	if (maximum_size GREATER 0)
 		math(EXPR tot_size_percent "${tot_size} * 100 / ${maximum_size}")
-		message("${size_name} Size: ${tot_size} of ${maximum_size} bytes (${tot_size_percent}%)")
+		message("${size_name} Size: ${tot_size} of ${maximum_size} bytes "
+			"(${tot_size_percent}%)")
 	else()
 		message("${size_name} Size: ${tot_size} bytes")
 	endif()

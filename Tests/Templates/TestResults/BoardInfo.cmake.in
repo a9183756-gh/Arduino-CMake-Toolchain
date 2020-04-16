@@ -1,0 +1,5 @@
+set(ARDUINO_BOARD_NAME "@board_name@")
+set(ARDUINO_BOARD_IDENTIFIER "@board_id@")
+set(ARDUINO_BOARD_DISTINCT_ID "@distinct_id@")
+set(ARDUINO_BOARD_PLATFORM "@pl_id@")
+
