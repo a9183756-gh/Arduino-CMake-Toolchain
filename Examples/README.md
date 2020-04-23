@@ -24,8 +24,8 @@ After the build is successful, the hello world application can be uploaded to th
 
 ```sh
 # Assuming /dev/ttyUSB0 to be the serial port corresponding to the board
-cmake --build . --target upload-hello_world -- SERIAL_PORT=/dev/ttyUSB0
+cmake --build . --target upload -- TARGET=hello_world SERIAL_PORT=/dev/ttyUSB0
 # Note: May need 'sudo' to access the serial port?
 # Instead of cmake, you can use the make command as below
-# <make> upload-hello_world SERIAL_PORT=/dev/ttyUSB0
+# <make> upload TARGET=hello_world SERIAL_PORT=/dev/ttyUSB0
 ```

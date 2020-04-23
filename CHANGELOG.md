@@ -1,5 +1,14 @@
 # Change Log
 
+## Version 1.1
+
+### Features
+
+* Support for many more official and 3rd party Arduino platforms
+* Support for limited target debugging facilities on some platforms
+* Local package management of platforms and tools without requiring Arduino IDE
+* Multiple bug fixes including the "board not working after upload" issue
+
 ## Version 1.0
 
 Initial version
@@ -20,4 +29,4 @@ Initial version
     * Arduino *native* libraries (e.g. Ethernet, Wire)
     * User installed 3rd Party Arduino libraries (e.g. IRremote)
     * Project specific Arduino libraries (those present in `<CMAKE_SOURCE_DIR>/libraries`)
-* Support for automatic dependency resolution (Arduino IDE like, but unprofessional)
+    * Support for automatic dependency resolution (Arduino IDE like, but unprofessional)
