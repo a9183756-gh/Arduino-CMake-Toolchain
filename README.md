@@ -124,11 +124,15 @@ Currently there is no support available for this within this toolchain. However 
 
 ## Known issues
 
+Many of the issues in the master branch have been fixed in release-1.1-dev branch. Although not tested to be fully stable, release-1.1-dev is stable enough to try out and report any futher issues before it gets merged into master.
+
+Below are the list of known issues in the master branch.
+
 **1. Uploaded application does not work on some boards**
 
 Caused by build linking issue that does not link some object files related to platform variant sources contained in the core library. Affects any Arduino platform that has variant source files in addition to the variant header files.
 
-Resolution: Temporary fixes are available in the branches [fix/variant_link_alt1](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/tree/fix/variant_link_alt1) and [fix/variant_link_alt2](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/tree/fix/variant_link_alt2).
+Resolution: Please try with release-1.1-dev branch or otherwise, temporary fixes are available in the branches [fix/variant_link_alt1](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/tree/fix/variant_link_alt1) and [fix/variant_link_alt2](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/tree/fix/variant_link_alt2).
 
 **Compromises when using the fix/variant_link_alt1 fix**: (1) CMake version must be above 3.13, (2) Application needs to link with core directly, like in [Examples/01_hello_world](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/tree/master/Examples/01_hello_world), and not like in [Examples/03_portable_app](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/tree/master/Examples/03_portable_app) which links transitively.
 
@@ -136,7 +140,7 @@ Resolution: Temporary fixes are available in the branches [fix/variant_link_alt1
 
 **2. Build/link issue on some 3rd party platforms**
 
-Fix is WIP.
+Resolution: Please try with release-1.1-dev branch.
 
 ## How it works
 
