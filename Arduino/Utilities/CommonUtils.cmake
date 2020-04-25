@@ -124,12 +124,6 @@ function(string_escape_regex return_value)
 	set("${return_value}" "${_value}" PARENT_SCOPE)
 endfunction()
 
-# Escape the string for making it suitable as part of markdown string
-function(string_escape_markdown return_value)
-	string(REGEX REPLACE "([][(){}_`+*.|\\\\<>!])" "\\\\\\1" _value ${ARGN})
-	set("${return_value}" "${_value}" PARENT_SCOPE)
-endfunction()
-
 # Check if two files are the same
 function(check_same_file file1 file2 _ret_var)
 	get_filename_component(x "${file1}" ABSOLUTE)
@@ -177,6 +171,28 @@ function(list_sublist list_var begin length return_list_var)
 		set("${return_list_var}" "${_result}" PARENT_SCOPE)
 	endif()
 
+endfunction()
+
+# Split the strings using separator and set it to each of the given variables
+# in reverse including return_list. Remaining fields are set in return_list
+# and remaining variables are not changed.
+function(string_split str sep)
+	string(REPLACE "${sep}" ";" _parts "${str}")
+	list(LENGTH ARGN _num_vars)
+	list(LENGTH _parts _part_idx)
+	set(_var_idx 0)
+	set(_var "")
+	while (_var_idx LESS _num_vars AND _part_idx GREATER 0)
+		list(GET ARGN ${_var_idx} _var)
+		math(EXPR _var_idx "${_var_idx} + 1")
+		math(EXPR _part_idx "${_part_idx} - 1")
+		list(GET _parts ${_part_idx} _part)
+		list(REMOVE_AT _parts ${_part_idx})
+		set("${_var}" "${_part}" PARENT_SCOPE)
+	endwhile()
+	if (NOT _var STREQUAL "" AND _part_idx GREATER 0)
+		list(APPEND _var ${_parts})
+	endif()
 endfunction()
 
 # Exit with error

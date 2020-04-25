@@ -1,4 +1,12 @@
 # List of supported Arduino boards
 
-| Platform | Boards | Upload | Remote provisioning | ISP | Debug |
-|----------|--------|--------|---------------------|-----|-------|
+Following are the list of boards known to be supported or not supported using
+the [Arduino CMake toolchain][1]. This list is a result of tests done on the
+official and 3rd party list of Arduino platforms maintained in the 
+[Arduino Wiki][2]. For the up-to-date results, you may also visit the
+[nightly CDash build results][3].
+
+[1]: https://github.com/arduino-cmake-toolchain/Arduino-CMake-Toolchain
+[2]: https://github.com/arduino/Arduino/wiki/Unofficial-list-of-3rd-party-boards-support-urls
+[3]: https://my.cdash.org/index.php?project=Arduino-CMake-Toolchain
+

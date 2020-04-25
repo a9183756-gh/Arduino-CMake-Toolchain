@@ -208,29 +208,28 @@ endfunction()
 #
 macro(packages_set_parent_scope)
 
-	set(namespace "${ARDUINO_PACKAGE_NAMESPACE}")
+	set(_pkg_namespace "${ARDUINO_PACKAGE_NAMESPACE}")
 
-	if (NOT DEFINED "${namespace}/json_count")
-		return()
+	if (DEFINED "${_pkg_namespace}/json_count")
+		foreach(json_count RANGE 1 "${${_pkg_namespace}/json_count}")
+			json_set_parent_scope("${_pkg_namespace}/ard_pkg.${json_count}")
+		endforeach()
+
+		foreach(pkg_id IN LISTS "${_pkg_namespace}/list")
+			set("${_pkg_namespace}.${pkg_id}/packager"
+				"${${_pkg_namespace}.${pkg_id}/packager}" PARENT_SCOPE)
+			set("${_pkg_namespace}.${pkg_id}/json_namespaces"
+				"${${_pkg_namespace}.${pkg_id}/json_namespaces}" PARENT_SCOPE)
+			set("${_pkg_namespace}.${pkg_id}/json_files"
+				"${${_pkg_namespace}.${pkg_id}/json_files}" PARENT_SCOPE)
+			set("${_pkg_namespace}.${pkg_id}/json_prefixes"
+				"${${_pkg_namespace}.${pkg_id}/json_prefixes}" PARENT_SCOPE)
+		endforeach()
+
+		set("${_pkg_namespace}/json_count" "${${_pkg_namespace}/json_count}"
+			PARENT_SCOPE)
+		set("${_pkg_namespace}/list" "${${_pkg_namespace}/list}" PARENT_SCOPE)
 	endif()
-
-	foreach(json_count RANGE 1 "${${namespace}/json_count}")
-		json_set_parent_scope("${namespace}/ard_pkg.${json_count}")
-	endforeach()
-
-	foreach(pkg_id IN LISTS "${namespace}/list")
-		set("${namespace}.${pkg_id}/packager"
-			"${${namespace}.${pkg_id}/packager}" PARENT_SCOPE)
-		set("${namespace}.${pkg_id}/json_namespaces"
-			"${${namespace}.${pkg_id}/json_namespaces}" PARENT_SCOPE)
-		set("${namespace}.${pkg_id}/json_files"
-			"${${namespace}.${pkg_id}/json_files}" PARENT_SCOPE)
-		set("${namespace}.${pkg_id}/json_prefixes"
-			"${${namespace}.${pkg_id}/json_prefixes}" PARENT_SCOPE)
-	endforeach()
-
-	set("${namespace}/json_count" "${${namespace}/json_count}" PARENT_SCOPE)
-	set("${namespace}/list" "${${namespace}/list}" PARENT_SCOPE)
 
 endmacro()
 
@@ -252,8 +251,10 @@ endmacro()
 #
 # Filter options:
 # PACKAGER <packager>: Packager that provide the platform
+# PACKAGE_ID <packageID>: Identifier of the packager rather than name 
 # JSON_FILES <file>...: One or more JSON files that provide the platform
 # ARCHITECTURE <arch>: Platform architecture
+# ARCH_ID <archID>: Identifier of the architecture (mostly same)
 # VERSION_EQUAL/VERSION_GREATER_EQUAL <version>: Platform version.
 # If there are more than one that satisfies the version for a given PACKAGER
 # and ARCHITECTURE, the highest one satisfying other constraints is returned.
@@ -262,9 +263,23 @@ endmacro()
 #
 function(packages_find_platforms return_list)
 
-	cmake_parse_arguments(parsed_args "INSTALL_PREFERRED;INSTALLED"
-		"PACKAGER;ARCHITECTURE;VERSION_EQUAL;VERSION_GREATER_EQUAL"
-		"JSON_FILES" ${ARGN})
+	set(_optional_params
+		"INSTALL_PREFERRED" "INSTALLED"
+	)
+
+	set(_one_arg_params
+		"PACKAGER" "PACKAGE_ID"
+		"ARCHITECTURE" "ARCH_ID"
+		"VERSION_EQUAL" "VERSION_GREATER_EQUAL"
+		"BOARD_ID" # Can be ignored here
+	)
+
+	set(_multi_arg_params
+		"JSON_FILES"
+	)
+
+	cmake_parse_arguments(parsed_args "${_optional_params}"
+		"${_one_arg_params}" "${_multi_arg_params}" ${ARGN})
 
 	set(namespace "${ARDUINO_PACKAGE_NAMESPACE}")
 
@@ -280,6 +295,13 @@ function(packages_find_platforms return_list)
 
 	set(match_pl_list)
 	foreach(pkg_id IN LISTS "${namespace}/list")
+
+		# Check for matching package ID
+		if (NOT "${parsed_args_PACKAGE_ID}" STREQUAL "" AND
+			NOT "${pkg_id}" STREQUAL "${parsed_args_PACKAGE_ID}")
+			# Package ID does not match
+			continue()
+		endif()
 
 		# Check for matching packager
 		set(pkg_name "${${namespace}.${pkg_id}/packager}")
@@ -328,6 +350,13 @@ function(packages_find_platforms return_list)
 				json_get_value("${json_namespace}" "${pl}.architecture" pl_arch)
 				if (NOT "${parsed_args_ARCHITECTURE}" STREQUAL "" AND
 					NOT "${pl_arch}" STREQUAL "${parsed_args_ARCHITECTURE}")
+					continue()
+				endif()
+
+				# Check for architecture ID
+				string(MAKE_C_IDENTIFIER "${pl_arch}" arch_id)
+				if (NOT "${parsed_args_ARCH_ID}" STREQUAL "" AND
+					NOT "${arch_id}" STREQUAL "${parsed_args_ARCH_ID}")
 					continue()
 				endif()
 
@@ -501,9 +530,23 @@ endfunction()
 #
 function(packages_find_tools pl_arch return_list)
 
-	cmake_parse_arguments(parsed_args "INSTALL_PREFERRED;INSTALLED"
-		"PACKAGER;NAME;VERSION_EQUAL;VERSION_GREATER_EQUAL"
-		"JSON_FILES" ${ARGN})
+	set(_optional_params
+		"INSTALL_PREFERRED" "INSTALLED"
+	)
+
+	set(_one_arg_params
+		"PACKAGER"
+		"NAME"
+		"VERSION_EQUAL" "VERSION_GREATER_EQUAL"
+		"TOOL_REFERENCE"
+	)
+
+	set(_multi_arg_params
+		"JSON_FILES"
+	)
+
+	cmake_parse_arguments(parsed_args "${_optional_params}"
+		"${_one_arg_params}" "${_multi_arg_params}" ${ARGN})
 
 	# Parse version argument to ignore part after '-'
 	if (parsed_args_VERSION_GREATER_EQUAL)
@@ -598,6 +641,14 @@ function(packages_find_tools pl_arch return_list)
 					"${parsed_args_VERSION_GREATER_EQUAL}")
                     continue()
                 endif()
+
+				# Check for matching tool reference
+				if (NOT "${parsed_args_TOOL_REFERENCE}" STREQUAL "" AND
+					NOT "${tl_name}-${tl_version_str}" STREQUAL
+					"${parsed_args_TOOL_REFERENCE}" AND
+					NOT "${tl_name}" STREQUAL "${parsed_args_TOOL_REFERENCE}")
+					continue()
+				endif()
 
 				# Check for installation match
 				_packages_get_tool_path("${json_dir}" "${pkg_name}" "${pl_arch}"

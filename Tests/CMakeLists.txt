@@ -92,7 +92,6 @@ function(_tests_get_skip_regex_for_test pl_id distinct_id return_regex)
 	elseif (${CMAKE_HOST_WIN32})
         set(_host_name "windows")
     endif()
-	message("_host_name:${_host_name}")
 
 	set(all_skipped_tests ${skipped_tests_list})
 	if (_host_name)
@@ -115,7 +114,6 @@ function(_tests_get_skip_regex_for_test pl_id distinct_id return_regex)
 	endwhile()
 
 	string(REPLACE ";" "|" _output_regex "${_output_regex_list}")
-	message("_output_regex:${_output_regex}")
 	set("${return_regex}" "${_output_regex}" PARENT_SCOPE)
 
 endfunction()
@@ -123,98 +121,26 @@ endfunction()
 # Setup board tests
 function(SetupBoardTests)
 
-	# Find ARDUINO_INSTALL_PATH, ARDUINO_PACKAGE_PATH and
-	# ARDUNIO_SKETCHBOOK_PATH
-	InitializeArduinoPackagePathList()
+	# Call the platform setup workflow, to ensure that the platform is ready
+	# to be used for setting up tests for the boards. Platform setup may
+	# involve installation (if package management is enabled) and indexing
+	# of the boards on the platform.
+	PlatformSetupWorkflow()
 
-	# Download and index the packages, and install the platforms from the
-	# given board manager URL list if any
-	set(_json_file "")
-	set(_install_url "")
-	set(_ref_url_list)
-
-	set(_install_url "${ARDUINO_BOARD_MANAGER_URL}")
-	set(_ref_url_list "${ARDUINO_BOARD_MANAGER_REF_URL}")
-
-	# Download the package of the install URL
-	set(ARDUINO_ENABLE_PACKAGE_MANAGER TRUE)
-	if (NOT EXISTS "${_install_url}")
-		BoardManager_DownloadPackage("${_install_url}"
-			JSON_FILES_LIST _json_file REQUIRED)
-	else()
-		set(_json_file "${_install_url}")
-	endif()
-	IndexArduinoPackages(${_json_file})
-
-	# Download all other reference only URLs
-	if (NOT "${_ref_url_list}" STREQUAL "")
-		BoardManager_DownloadPackage(${_ref_url_list}
-			JSON_FILES_LIST _ref_json_files)
-		if (_ref_json_files)
-			IndexArduinoPackages(${_ref_json_files})
-		endif()
-	endif()
-
-	# Index all the pre-installed packages
-	if (NOT "${ARDUINO_NO_INSTALLED_REFERENCES}")
-		IndexArduinoPackages()
-	endif()
-
-	# Install the necessary platforms
-	set(_install_pl)
-	packages_find_platforms(pl_list JSON_FILES ${_json_file})
-	if(NOT "${ARDUINO_PLATFORM}" STREQUAL "")
-
-		# Find the platforms that can be installed from the board given
-		platforms_find_platform_in_list("${pl_list}" "${ARDUINO_PLATFORM}"
-			_install_pl)
-
-	else()
-
-		# Find the platforms that can be installed from the board given
-		boards_find_platform_in_list("${pl_list}" "${ARDUINO_BOARD}"
-			_install_pl)
-
-	endif()
-
-	list(LENGTH _install_pl _num_install_pl)
-	if (NOT _num_install_pl EQUAL 1)
-		message("Available platforms: ${pl_list}")
-		message(WARNING 
-			"Not sure which platform to install! Try with the option "
-			"-D ARDUINO_BOARD=<package>.<architecture>.<board> and, "
-			"if needed, provide the correct URL that contains the "
-			"board using -D ARDUINO_BOARD_MANAGER_URL=<URL>.")
+	message("ARDUINO_PLATFORM_ID:${ARDUINO_PLATFORM_ID}")
+	if ("${ARDUINO_PLATFORM_ID}" STREQUAL "")
+		message(FATAL_ERROR "'${ARDUINO_PLATFORM}' is not setup successfully. "
+			"No tests will be run on the platform.")
 		return()
 	endif()
 
-	BoardManager_InstallPlatform("${_install_pl}"
-		RESULT_VARIABLE _result)
-	if (NOT _result EQUAL 0)
-		message(WARNING "Installing platform '${_install_pl}' failed!!! "
-			"Corresponding boards won't be available for tests.")
-	endif()
-
-	packages_get_platform_property("${_install_pl}" "/pl_path" pl_path)
-	packages_get_platform_property("${_install_pl}" "/pkg_id" pkg_id)
-	packages_get_platform_property("${_install_pl}" "/json_idx" json_idx)
-	packages_get_property("${pkg_id}" "${json_idx}" "name" pkg_name)
-	packages_get_platform_property("${_install_pl}" "architecture" pl_arch)
-
 	# Index all the installed platforms and boards
-	IndexArduinoBoards("ard_boards" JSON_FILES ${_json_file}
-		PACKAGER "${pkg_name}" ARCHITECTURE "${pl_arch}")
 	boards_get_list(ard_boards boards_list)
 
 	# Choose the provided board
-	if (NOT "${ARDUINO_BOARD}" STREQUAL "")
-		boards_find_board_in_list("${boards_list}" "${ARDUINO_BOARD}"
-			sel_boards_list)
-		if ("${sel_boards_list}" STREQUAL "")
-			message(WARNING "No board matches '${ARDUINO_BOARD}' "
-				"No board tests will be run for this platform.")
-		endif()
-		set(boards_list "${sel_boards_list}")
+	if ("${boards_list}" STREQUAL "" AND NOT "${ARDUINO_BOARD}" STREQUAL "")
+		message(WARNING "No board matches '${ARDUINO_BOARD}'!!! "
+			"No tests will be run on '${_install_pl}' platform.")
 	endif()
 
 	# Load skipped tests info
@@ -261,13 +187,27 @@ function(SetupBoardTests)
 		# Add the test
 		set(_board_build_dir "${build_root_dir}/${distinct_id}")
 		set(_board_result_dir "${result_root_dir}/${distinct_id}")
+		# To handle skipped tests in old version of CMake, we need to run
+		# through a wrapper shell script, that returns a different return
+		# code than the usual 1 returned by CMake on error.
+		set(_test_dir "${ARDUINO_TOOLCHAIN_DIR}/Tests")
+		if (EXISTS "/bin/sh")
+			set(shell_cmd "/bin/sh" "${_test_dir}/RunTestWrapper.sh"
+				"${_board_result_dir}")
+		elseif(CMAKE_HOST_WIN32)
+			set(shell_cmd "${_test_dir}/RunTestWrapper.bat"
+				"${_board_result_dir}")
+		else()
+			set(shell_cmd)
+		endif()
 		add_test(NAME "${distinct_id}"
-			COMMAND "${CMAKE_COMMAND}"
+			COMMAND ${shell_cmd} "${CMAKE_COMMAND}"
 				-D "CMAKE_GENERATOR=${CMAKE_GENERATOR}"
 				-D "ARDUINO_TOOLCHAIN_DIR=${ARDUINO_TOOLCHAIN_DIR}"
 				-D "ARDUINO_BUILD_ROOT_DIR=${build_root_dir}"
 				-D "ARDUINO_SYSTEM_ROOT_DIR=${sys_root_dir}"
 				-D "ARDUINO_RESULT_ROOT_DIR=${result_root_dir}"
+				-D "ARDUINO_BOARD_OPTIONS_FILE=${ARDUINO_BOARD_OPTIONS_FILE}"
 				-D "ARDUINO_BOARD_ID=${distinct_id}"
 				-D "ARDUINO_PKG_MGR_DL_CACHE=${ARDUINO_PKG_MGR_DL_CACHE}"
 				-D "ARDUINO_SKIP_REGULAR_EXPRESSION=${_skip_regex}"
@@ -277,14 +217,17 @@ function(SetupBoardTests)
 
 		set_tests_properties("${distinct_id}" PROPERTIES
 			FIXTURES_REQUIRED "PlTestResults"
+			SKIP_RETURN_CODE 100
 		)
 
-		if (NOT "${_skip_regex}" STREQUAL "" AND
-			NOT CMAKE_VERSION VERSION_LESS "3.16.6")
+		if ("${shell_cmd}" STREQUAL "" AND
+			NOT "${_skip_regex}" STREQUAL "" AND
+			NOT CMAKE_VERSION VERSION_LESS "3.16.0")
 			set_tests_properties("${distinct_id}" PROPERTIES
 				SKIP_REGULAR_EXPRESSION "skipped known issue"
 			)
 		endif()
+
 		list(APPEND all_boards_list "${distinct_id}")
 
 	endforeach()
@@ -329,7 +272,7 @@ function(SetupPlatformTests pl_url ref_url_list return_pl_tests)
 	endif()
 
 	IndexArduinoPackages("${_json_file}")
-	packages_find_platforms(pl_list JSON_FILES ${_json_file})
+	packages_find_platforms(pl_list JSON_FILES ${_json_file} ${ARGN})
 
 	foreach(pl_id IN LISTS pl_list)
 
@@ -376,12 +319,26 @@ function(SetupPlatformTests pl_url ref_url_list return_pl_tests)
 		# Add the test for the platform
 		set(_pl_build_dir "${build_root_dir}/${test_id}")
 		set(_pl_results_dir "${result_root_dir}/${test_id}")
+		# To handle skipped tests in old version of CMake, we need to run
+		# through a wrapper shell script, that returns a different return
+		# code than the usual 1 returned by CMake on error.
+		set(_test_dir "${ARDUINO_TOOLCHAIN_DIR}/Tests")
+		if (EXISTS "/bin/sh")
+			set(shell_cmd "/bin/sh" "${_test_dir}/RunTestWrapper.sh"
+				"${_pl_results_dir}")
+		elseif(CMAKE_HOST_WIN32)
+			set(shell_cmd "${_test_dir}/RunTestWrapper.bat"
+				"${_pl_results_dir}")
+		else()
+			set(shell_cmd)
+		endif()
 		add_test(NAME "${test_id}"
-			COMMAND "${CMAKE_COMMAND}"
+			COMMAND ${shell_cmd} "${CMAKE_COMMAND}"
 				-D "CMAKE_GENERATOR=${CMAKE_GENERATOR}"
+				-D "ARDUINO_BOARD_OPTIONS_FILE=${ARDUINO_BOARD_OPTIONS_FILE}"
 				-D "ARDUINO_BOARD_MANAGER_URL=${pl_url}"
 				-D "ARDUINO_BOARD_MANAGER_REF_URL=${ref_url_list}"
-				-D "ARDUINO_BOARD=${ARDUINO_BOARD}"
+				-D "ARDUINO_BOARD=${_brd_id}"
 				-D "ARDUINO_TOOLCHAIN_DIR=${ARDUINO_TOOLCHAIN_DIR}"
 				-D "ARDUINO_BUILD_ROOT_DIR=${_pl_build_dir}"
 				-D "ARDUINO_SYSTEM_ROOT_DIR=${_pl_sys_dir}"
@@ -396,8 +353,10 @@ function(SetupPlatformTests pl_url ref_url_list return_pl_tests)
 
 		set_tests_properties("${test_id}" PROPERTIES
 			FIXTURES_REQUIRED "TestResults"
+			SKIP_RETURN_CODE 100
 		)
-		if (NOT CMAKE_VERSION VERSION_LESS "3.16.6")
+		if ("${shell_cmd}" STREQUAL "" AND
+			NOT CMAKE_VERSION VERSION_LESS "3.16.0")
 			set_tests_properties("${test_id}" PROPERTIES
 				SKIP_REGULAR_EXPRESSION "Skipped known issues!")
 		endif()
@@ -426,7 +385,7 @@ function(SetupPackageTests pkg_url_list return_pl_tests)
 		list(APPEND _ref_url_list ${ARDUINO_BOARD_MANAGER_REF_URL})
 
 		SetupPlatformTests("${_pl_url}" "${_ref_url_list}"
-			"${return_pl_tests}")
+			"${return_pl_tests}" ${ARGN})
 	endforeach()
 
 	set("${return_pl_tests}" "${${return_pl_tests}}" PARENT_SCOPE)
@@ -440,21 +399,59 @@ if ("${ARDUINO_RESULT_ROOT_DIR}" STREQUAL "") # Setup package tests
 
 	InitializeArduinoPackagePathList()
 
-	# Setup platform tests from the default packages
-	if (NOT "${ARDUINO_NO_INSTALLED_PLATFORMS}")
-		packages_get_default_packages(def_json_files)
-		SetupPackageTests("${def_json_files}" all_pl_tests)
+	# Find filter arguments to SetupPackageTests
+	set(_filter_args)
+	set(_brd_id "")
+	# From board options file
+	if (NOT "${ARDUINO_BOARD_OPTIONS_FILE}" STREQUAL "")
+		include("${ARDUINO_BOARD_OPTIONS_FILE}")
 	endif()
-	
+	# From ARDUINO_PACKAGER...
+	if (NOT "${ARDUINO_PACKAGER}" STREQUAL "")
+		message(STATUS "Filter option: ARDUINO_PACKAGER=${ARDUINO_PACKAGER}")
+		set(_pkg_id "${ARDUINO_PACKAGER}")
+		list(APPEND _filter_args "PACKAGE_ID" "${_pkg_id}")
+	endif()
+	# From ARDUINO_PLATFORM...
+	if (NOT "${ARDUINO_PLATFORM}" STREQUAL "")
+		message(STATUS "Filter option: ARDUINO_PLATFORM=${ARDUINO_PLATFORM}")
+		set(_arch_id "")
+		set(_pkg_id "")
+		string_split("${ARDUINO_PLATFORM}" "." _arch_id _pkg_id _ign)
+		if (NOT _arch_id STREQUAL "")
+			list(APPEND _filter_args "ARCH_ID" "${_arch_id}")
+		endif()
+		if (NOT _pkg_id STREQUAL "")
+			list(APPEND _filter_args "PACKAGE_ID" "${_pkg_id}")
+		endif()
+	endif()
+	# From ARDUINO_BOARD...
+	if (NOT "${ARDUINO_BOARD}" STREQUAL "")
+		message(STATUS "Filter option: ARDUINO_BOARD=${ARDUINO_BOARD}")
+		set(_arch_id "")
+		set(_pkg_id "")
+		string_split("${ARDUINO_BOARD}" "." _brd_id _arch_id _pkg_id _ign)
+		if (NOT _arch_id STREQUAL "")
+			list(APPEND _filter_args "ARCH_ID" "${_arch_id}")
+		endif()
+		if (NOT _pkg_id STREQUAL "")
+			list(APPEND _filter_args "PACKAGE_ID" "${_pkg_id}")
+		endif()
+	endif()
+
 	# Setup platform tests from the board manager URL packages
 	if (NOT "${ARDUINO_BOARD_MANAGER_URL}" STREQUAL "")
+
+		message(STATUS "Filter option: "
+			"ARDUINO_BOARD_MANAGER_URL=${ARDUINO_BOARD_MANAGER_URL}")
+
 		# if a CMake list (';' seperated) of comma seperated URLs are provided
-		# or a file containing one URL per line is provided, then package tests
-		# are defined (which is a test for each package comprising of a set of
-		# boards). In other case, if only comma seperated URLs are provided, then
-		# individual board tests are defined. Note that running one package at a
-		# time ensures that we utilize disk space only for one package at a time,
-		# rather than trying to install all the boards in all the packages at once.
+		# or a file containing one URL per line is provided, then one platform
+		# test is added for each of the platforms contained in the package,
+		# which in turn installs (if necessary) and adds boards tests for the
+		# platform. Note that running one platform at a time ensures that we
+		# utilize disk space only for one package at a time, rather than trying
+		# to install all the boards in all the packages at once.
 		if (EXISTS "${ARDUINO_BOARD_MANAGER_URL}")
 			if (NOT IS_DIRECTORY "${ARDUINO_BOARD_MANAGER_URL}")
 				file(STRINGS "${ARDUINO_BOARD_MANAGER_URL}" _url_list)
@@ -464,13 +461,20 @@ if ("${ARDUINO_RESULT_ROOT_DIR}" STREQUAL "") # Setup package tests
 						list(APPEND _filtered_url_list "${_url}")
 					endif()
 				endforeach()
-				SetupPackageTests("${_filtered_url_list}" all_pl_tests)
+				SetupPackageTests("${_filtered_url_list}" all_pl_tests
+					${_filter_args})
 			endif()
 		else()
-			SetupPackageTests("${ARDUINO_BOARD_MANAGER_URL}" all_pl_tests)
+			SetupPackageTests("${ARDUINO_BOARD_MANAGER_URL}" all_pl_tests
+				${_filter_args})
 		endif()
+	else()
+		packages_get_default_packages(def_json_files)
+		SetupPackageTests("${def_json_files}" all_pl_tests INSTALLED
+			${_filter_args})
 	endif()
 
+	# Setup a test for preparing the test results
 	add_test(NAME "PrepareTestResults"
 		COMMAND "${CMAKE_COMMAND}"
 			-D "ARDUINO_TOOLCHAIN_DIR=${ARDUINO_TOOLCHAIN_DIR}"
@@ -484,7 +488,6 @@ if ("${ARDUINO_RESULT_ROOT_DIR}" STREQUAL "") # Setup package tests
 
 	set_tests_properties("PrepareTestResults" PROPERTIES
 		FIXTURES_CLEANUP "TestResults"
-		ATTACHED_FILES "${CMAKE_BINARY_DIR}/test_results.tar.gz"
 	)
 
 else() # Setup board tests

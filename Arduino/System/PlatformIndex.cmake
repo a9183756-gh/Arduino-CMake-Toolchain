@@ -42,12 +42,13 @@ function(IndexArduinoPlatforms namespace)
 
 	# If no packages have been indexed so far, index the default packages.
 	# This is for the backward compatible behaviour of simply calling
-	# IndexArduinoBoards, without explicitly calling any other functions.
+	# IndexArduinoPlatforms, without explicitly calling any other functions.
 	# However, explicitly calling other functions (IndexArduinoPackages,
 	# packages_find_platforms etc)
 	packages_get_list(_pkg_list)
 	if ("${_pkg_list}" STREQUAL "")
 		IndexArduinoPackages()
+		packages_set_parent_scope()
 	endif()
 
 	packages_find_platforms(_installed_pl_list INSTALLED ${ARGN})

@@ -4,17 +4,22 @@ set(dashboard_user_home "$ENV{HOME}")
 
 # Host description
 if(NOT CTEST_SITE)
-	cmake_host_system_information(RESULT hostname QUERY HOSTNAME)
-	cmake_host_system_information(RESULT osname QUERY OS_NAME)
-	cmake_host_system_information(RESULT osrelease QUERY OS_RELEASE)
-	cmake_host_system_information(RESULT osversion QUERY OS_VERSION)
-	cmake_host_system_information(RESULT osplatform QUERY OS_PLATFORM)
-	set(CTEST_SITE "${hostname}, ${osname}, ${osrelease}, ${osplatform}")
+	cmake_host_system_information(RESULT fqdn QUERY FQDN)
+	set(osname "${CMAKE_HOST_SYSTEM_NAME}")
+	set(osplatform "${CMAKE_HOST_SYSTEM_PROCESSOR}")
+	set(CTEST_SITE "${fqdn}, ${osname}, ${osplatform}")
+
 endif()
 
-set(test_name "installation_test")
-
 set(_config_args)
+if (DEFINED ARDUINO_BOARD_OPTIONS_FILE)
+	get_filename_component(test_name "${ARDUINO_BOARD_OPTIONS_FILE}" NAME)
+	string(REGEX REPLACE "\\.[^.]*$" "" test_name "${test_name}")
+	string(MAKE_C_IDENTIFIER "${test_name}" test_name)
+	list(APPEND _config_args
+		"-DARDUINO_BOARD_OPTIONS_FILE=${ARDUINO_BOARD_OPTIONS_FILE}")
+endif()
+
 if (DEFINED ARDUINO_BOARD_MANAGER_URL)
 	list(APPEND ARDUINO_BOARD_MANAGER_REF_URL
 		"https://downloads.arduino.cc/packages/package_index.json")
@@ -25,8 +30,9 @@ if (DEFINED ARDUINO_BOARD_MANAGER_URL)
 	string(MAKE_C_IDENTIFIER "${test_name}" test_name)
 	list(APPEND _config_args
 		"-DARDUINO_BOARD_MANAGER_URL=${ARDUINO_BOARD_MANAGER_URL}"
-		"-DARDUINO_NO_INSTALLED_PLATFORMS=1"
 	)
+else()
+	set(test_name "installed")
 endif()
 
 if (DEFINED ARDUINO_BOARD_MANAGER_REF_URL)
@@ -40,13 +46,23 @@ if (DEFINED ARDUINO_NO_INSTALLED_REFERENCES)
 		"-DARDUINO_NO_INSTALLED_REFERENCES=${ARDUINO_NO_INSTALLED_REFERENCES}"
 	)
 endif()
-if (DEFINED ARDUINO_BOARD)
-	string(MAKE_C_IDENTIFIER "${ARDUINO_BOARD}" test_name)
-	list(APPEND _config_args "-DARDUINO_BOARD=${ARDUINO_BOARD}")
+
+if (DEFINED ARDUINO_PACKAGER)
+	string(MAKE_C_IDENTIFIER "${ARDUINO_PACKAGER}" _pkg)
+	set(test_name "${test_name}/pkg_${_pkg}")
+	list(APPEND _config_args "-DARDUINO_PACKAGER=${ARDUINO_PACKAGER}")
 endif()
+
 if (DEFINED ARDUINO_PLATFORM)
-	string(MAKE_C_IDENTIFIER "${ARDUINO_PLATFORM}" test_name)
+	string(MAKE_C_IDENTIFIER "${ARDUINO_PLATFORM}" _pl)
+	set(test_name "${test_name}/pl_${_pl}")
 	list(APPEND _config_args "-DARDUINO_PLATFORM=${ARDUINO_PLATFORM}")
+endif()
+
+if (DEFINED ARDUINO_BOARD)
+	string(MAKE_C_IDENTIFIER "${ARDUINO_BOARD}" _brd)
+	set(test_name "${test_name}/brd_${_brd}")
+	list(APPEND _config_args "-DARDUINO_BOARD=${ARDUINO_BOARD}")
 endif()
 
 if (DEFINED ARDUINO_PKG_MGR_DL_CACHE)
@@ -85,7 +101,8 @@ if(NOT DEFINED dashboard_model)
 	set(dashboard_model Experimental)
 endif()
 if(NOT "${dashboard_model}" MATCHES "^(Nightly|Experimental|Continuous)$")
-	message(FATAL_ERROR "dashboard_model must be Nightly, Experimental, or Continuous")
+	message(FATAL_ERROR
+		"dashboard_model must be Nightly, Experimental, or Continuous")
 endif()
 
 # Default to a Debug build.
@@ -123,4 +140,11 @@ ctest_configure(OPTIONS "${_config_args}")
 ctest_read_custom_files(${CTEST_BINARY_DIRECTORY})
 ctest_build()
 ctest_test()
-ctest_submit()
+
+if (NOT CTEST_NO_SUBMIT)
+	if (EXISTS "${CTEST_BINARY_DIRECTORY}/test_results.tar.gz")
+		ctest_upload(FILES "${CTEST_BINARY_DIRECTORY}/test_results.tar.gz")
+	endif()
+	ctest_submit()
+endif()
+

@@ -1,0 +1,44 @@
+<details>
+<summary><strong>&#x2717;</strong> <strike>@_pl_name@ <em>by @_pkg_maint@</em> [@_pl_id@] (@pl_version@)</strike> [<a href="@_pkg_url@">url</a>] [<a href="@web_url@">info</a>] [<a href="@help_url@">help</a>] [<a href="@_e_mail@">email</a>]</summary>
+<br/>
+
+<table>
+<tr>
+  <td>
+    <strong>Boards</strong></td>
+  <td>
+@boards_list@
+  </td>
+</tr>
+<tr>
+  <td>
+    <strong>Upload</strong></td>
+  <td>
+@upload_list@
+  </td>
+</tr>
+<tr>
+  <td>
+    <strong>Remote Provisioning</strong></td>
+  <td>
+@upload-network_list@
+  </td>
+</tr>
+<tr>
+  <td>
+    <strong>ISP</strong></td>
+  <td>
+@program_list@
+  </td>
+</tr>
+<tr>
+  <td>
+    <strong>Debug</strong></td>
+  <td>
+@debug_list@
+  </td>
+</tr>
+</table>
+
+</details>
+ 
