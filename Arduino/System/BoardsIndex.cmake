@@ -37,12 +37,35 @@ include(Arduino/System/PlatformIndex)
 #
 function(IndexArduinoBoards namespace)
 
+	# If no packages have been indexed so far, index the default packages.
+	# This is for the backward compatible behaviour of simply calling
+	# IndexArduinoBoards, without explicitly calling any other functions.
+	# However, explicitly calling other functions (IndexArduinoPackages,
+	# packages_find_platforms etc)
+	packages_get_list(_pkg_list)
+	if ("${_pkg_list}" STREQUAL "")
+		IndexArduinoPackages()
+		packages_set_parent_scope()
+	endif()
+
+	set(_one_arg_params "BOARD_ID")
+	cmake_parse_arguments(parsed_args "" "${_one_arg_params}" "" ${ARGN})
+
+	# Split board ID into components
+	string_split("${parsed_args_BOARD_ID}" "." _brd_id _arch_id _pkg_id _ign)
+	if (NOT _arch_id STREQUAL "")
+		list(APPEND parsed_args_UNPARSED_ARGUMENTS "ARCH_ID" "${_arch_id}")
+	endif()
+	if (NOT _pkg_id STREQUAL "")
+		list(APPEND parsed_args_UNPARSED_ARGUMENTS "PACKAGE_ID" "${_pkg_id}")
+	endif()
+
 	# The namespace that will be used for indexing platforms
 	set(pl_namespace "${namespace}/ard_plat")
 	set(pl_count 0)
 
 	# Index all the installed arduino platforms first
-	IndexArduinoPlatforms("${pl_namespace}" ${ARGN})
+	IndexArduinoPlatforms("${pl_namespace}" ${parsed_args_UNPARSED_ARGUMENTS})
 	platforms_get_list("${pl_namespace}" _pl_list)
 
 	# List all the boards within the indexed platforms
@@ -73,6 +96,12 @@ function(IndexArduinoBoards namespace)
 			properties_get_value("${brd_namespace}" "${_board_prefix}.hide"
 				_board_hide QUIET DEFAULT "FALSE")
 			if (_board_hide)
+				continue()
+			endif()
+
+			# Check for filtered board ID
+			if (NOT "${_brd_id}" STREQUAL "" AND
+				NOT "${_brd_id}" STREQUAL "${_board_prefix_id}")
 				continue()
 			endif()
 
@@ -476,11 +505,15 @@ function(SelectArduinoBoard namespace)
 	# Include board options
 	_boards_include_board_options("${CMAKE_BINARY_DIR}/BoardOptions.cmake")
 
-	# Initialize ARDUINO_BOARD cache option for the board selection.
-	# message("ARDUINO_BOARD:${ARDUINO_BOARD}")
-	set(ARDUINO_BOARD "${ARDUINO_BOARD}" CACHE STRING
-		"Arduino board for which the project is build for")
-	set_property(CACHE ARDUINO_BOARD PROPERTY STRINGS "")
+	# Initialize ARDUINO_OPTION:Board cache option for the board selection.
+	set(_opt_board "ARDUINO_OPTION:Board")
+	# message("ARDUINO_OPTION:Board:${${_opt_board}}")
+	set("${_opt_board}" "${ARDUINO_BOARD}" CACHE STRING
+		"Arduino board for which the project is built for")
+	set_property(CACHE "${_opt_board}" PROPERTY STRINGS "")
+	if (NOT DEFINED ARDUINO_BOARD)
+		set(ARDUINO_BOARD "${${_opt_board}}")
+	endif()
 
 	# Once ARDUINO_BOARD is selected (either through cache or through the
 	# board options), find the selected board identifier
@@ -491,9 +524,13 @@ function(SelectArduinoBoard namespace)
 	endif()
 
 	# Initialize ARDUINO_PROGRAMMER cache option for the programmer selection.
-	set(ARDUINO_PROGRAMMER "${ARDUINO_PROGRAMMER}" CACHE STRING
+	set(_opt_prog "ARDUINO_OPTION:Programmer")
+	set("${_opt_prog}" "${ARDUINO_PROGRAMMER}" CACHE STRING
 		"Arduino programmer used to upload program or burn bootloader")
-	set_property(CACHE ARDUINO_PROGRAMMER PROPERTY STRINGS "")
+	set_property(CACHE "${_opt_prog}" PROPERTY STRINGS "")
+	if (NOT DEFINED ARDUINO_PROGRAMMER)
+		set(ARDUINO_PROGRAMMER "${${_opt_prog}}")
+	endif()
 
 	# Once ARDUINO_PROGRAMMER is selected (either through cache or through the
 	# board options), find the selected programmer identifier
@@ -516,10 +553,10 @@ function(SelectArduinoBoard namespace)
 		TRUE)
 
 	# Set Last used Board options file
-	if (ARDUINO_BOARD_OPTIONS_FILE)
+	if (NOT "${ARDUINO_BOARD_OPTIONS_FILE}" STREQUAL "")
 		set(_LAST_USED_ARDUINO_BOARD_OPTIONS_FILE
 			"${ARDUINO_BOARD_OPTIONS_FILE}" CACHE INTERNAL "" FORCE)
-	elseif (NOT _LAST_USED_ARDUINO_BOARD_OPTIONS_FILE)
+	elseif ("${_LAST_USED_ARDUINO_BOARD_OPTIONS_FILE}" STREQUAL "")
 		set(_LAST_USED_ARDUINO_BOARD_OPTIONS_FILE
 			"${CMAKE_BINARY_DIR}/BoardOptions.cmake" CACHE INTERNAL "" FORCE)
 		add_configure_dependency("${_LAST_USED_ARDUINO_BOARD_OPTIONS_FILE}")
@@ -681,12 +718,12 @@ endfunction()
 # Any change through CMake-GUI is not detected here, which needs fix.
 function(check_board_options_changed _ret_var)
 
-	if (NOT _LAST_USED_ARDUINO_BOARD_OPTIONS_FILE)
+	if ("${_LAST_USED_ARDUINO_BOARD_OPTIONS_FILE}" STREQUAL "")
 		set("${_ret_var}" FALSE PARENT_SCOPE)
 		return()
 	endif()
 
-	if (ARDUINO_BOARD_OPTIONS_FILE)
+	if (NOT "${ARDUINO_BOARD_OPTIONS_FILE}" STREQUAL "")
 		check_same_file("${ARDUINO_BOARD_OPTIONS_FILE}"
 			"${_LAST_USED_ARDUINO_BOARD_OPTIONS_FILE}" _same_file)
 		if (NOT _same_file)
@@ -760,13 +797,13 @@ endfunction()
 # Implementation functions (Subject to change. DO NOT USE)
 #
 
-# Include the board options file, that will have the current board selected
+# Include the board options, that will have the current board selected
 macro(_boards_include_board_options options_file)
 
 	# For the first time, if not explicitly specified, use the generated
 	# BoardOptions.cmake
-	if (NOT ARDUINO_BOARD_OPTIONS_FILE AND
-		NOT _LAST_USED_ARDUINO_BOARD_OPTIONS_FILE AND
+	if ("${ARDUINO_BOARD_OPTIONS_FILE}" STREQUAL "" AND
+		"${_LAST_USED_ARDUINO_BOARD_OPTIONS_FILE}" STREQUAL "" AND
 		EXISTS "${options_file}")
 
 		set(ARDUINO_BOARD_OPTIONS_FILE "${options_file}")
@@ -777,7 +814,7 @@ macro(_boards_include_board_options options_file)
 	# to allow changing menu options either through BoardOptions.cmake or through
 	# CMake GUI. Otherwise, one will be made override of the other which is not
 	# user friendly.
-	if (NOT ARDUINO_BOARD_OPTIONS_FILE)
+	if ("${ARDUINO_BOARD_OPTIONS_FILE}" STREQUAL "")
 		check_board_options_changed(_b_changed)
 		if (_b_changed)
 			set(ARDUINO_BOARD_OPTIONS_FILE
@@ -786,7 +823,7 @@ macro(_boards_include_board_options options_file)
 	endif()
 
 	# Include the board options file.
-	if (ARDUINO_BOARD_OPTIONS_FILE)
+	if (NOT "${ARDUINO_BOARD_OPTIONS_FILE}" STREQUAL "")
 		include("${ARDUINO_BOARD_OPTIONS_FILE}")
 	endif()
 
@@ -835,11 +872,11 @@ macro(_boards_gen_board_options_for_boards)
 		set(_board_distinct_id "${${namespace}.${_board_id}/distinct_id}")
 		set(_board_short_id "${${namespace}.${_board_id}/short_id}")
 
-		# Append the board to the ARDUINO_BOARD cache entry
+		# Append the board to the "ARDUINO_OPTION:Board" cache entry
 		if (NOT _last_pl_id STREQUAL pl_id)
 			platforms_get_property("${pl_namespace}" "${pl_id}" "name" _pl_name)
 			if (b_cache)
-				set_property(CACHE ARDUINO_BOARD APPEND PROPERTY STRINGS
+				set_property(CACHE "${_opt_board}" APPEND PROPERTY STRINGS
 					"**** ${_pl_name} ****")
 			endif()
 			_boards_configure_file(APPEND
@@ -852,14 +889,14 @@ macro(_boards_gen_board_options_for_boards)
 			_board_name)
 		set(_board_name_in_menu "${_board_name} [${_board_distinct_id}]")
 		if (b_cache)
-			set_property(CACHE ARDUINO_BOARD APPEND PROPERTY STRINGS
+			set_property(CACHE "${_opt_board}" APPEND PROPERTY STRINGS
 				"${_board_name_in_menu}")
 		endif()
 
 		# Is this the selected board for the project build?
 		if ("${ARDUINO_BOARD_IDENTIFIER}" STREQUAL "${_board_id}")
-			set(ARDUINO_BOARD "${_board_name_in_menu}" CACHE STRING
-					"Arduino board for which the project is build for" FORCE)
+			set("${_opt_board}" "${_board_name_in_menu}" CACHE STRING
+				"Arduino board for which the project is build for" FORCE)
 			set(is_selected_board TRUE)
 			set(_sel_board_id "${_board_distinct_id}")
 			set(_sel_board_name "${_board_name}")
@@ -1065,12 +1102,12 @@ macro(_boards_gen_board_options_for_programmers)
 		set(pl_id "${${namespace}/prog.${_prog_id}/pl_id}")
 		set(_prog_distinct_id "${${namespace}/prog.${_prog_id}/distinct_id}")
 
-		# Append the programmer to the ARDUINO_PROGRAMMER cache entry
+		# Append the programmer to the "ARDUINO_OPTION:Programmer" cache entry
 		if (NOT _last_pl_id STREQUAL pl_id)
 			platforms_get_property("${pl_namespace}" "${pl_id}" "name"
 				_pl_name)
 			if (b_cache)
-				set_property(CACHE ARDUINO_PROGRAMMER APPEND PROPERTY STRINGS
+				set_property(CACHE "${_opt_prog}" APPEND PROPERTY STRINGS
 					"**** ${_pl_name} ****")
 			endif()
 			_boards_configure_file(APPEND
@@ -1083,13 +1120,13 @@ macro(_boards_gen_board_options_for_programmers)
 			_prog_name)
 		set(_prog_name_in_menu "${_prog_name} [${_prog_distinct_id}]")
 		if (b_cache)
-			set_property(CACHE ARDUINO_PROGRAMMER APPEND PROPERTY STRINGS
+			set_property(CACHE "${_opt_prog}" APPEND PROPERTY STRINGS
 				${_prog_name_in_menu})
 		endif()
 
 		# Is this the selected programmer for the project build?
 		if ("${ARDUINO_PROGRAMMER_ID}" STREQUAL "${_prog_id}")
-			set(ARDUINO_PROGRAMMER "${_prog_name_in_menu}" CACHE STRING
+			set("${_opt_prog}" "${_prog_name_in_menu}" CACHE STRING
 				"Arduino programmer used to upload program or burn bootloader"
 				FORCE)
 			set(_sel_prog_id "${_prog_distinct_id}")
@@ -1225,6 +1262,6 @@ endmacro()
 # cmake is reconfigured on any change to the board options. This is needed
 # because we do not include board options file when skipping board indexing
 # (in case board options did not change).
-if (_LAST_USED_ARDUINO_BOARD_OPTIONS_FILE)
+if (NOT "${_LAST_USED_ARDUINO_BOARD_OPTIONS_FILE}" STREQUAL "")
 	add_configure_dependency("${_LAST_USED_ARDUINO_BOARD_OPTIONS_FILE}")
 endif()

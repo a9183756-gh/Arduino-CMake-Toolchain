@@ -104,7 +104,8 @@ function(InitializeArduinoPackagePathList)
 			NO_CMAKE_FIND_ROOT_PATH
 			DOC "Path to Arduino IDE installation")
 	# message("ARDUINO_INSTALL_PATH:${ARDUINO_INSTALL_PATH}")
-	if (NOT ARDUINO_INSTALL_PATH AND NOT "${ARDUINO_ENABLE_PACKAGE_MANAGER}")
+	if (NOT ARDUINO_INSTALL_PATH AND NOT "${ARDUINO_ENABLE_PACKAGE_MANAGER}"
+		AND "${ARDUINO_BOARD_MANAGER_URL}" STREQUAL "")
 		message(FATAL_ERROR "Arduino IDE installation is not found!!!\n"
 			"Use -DARDUINO_INSTALL_PATH=<path> to manually specify the path (OR)\n"
 			"Use -DARDUINO_BOARD_MANAGER_URL=<board_url> to try downloading\n")

@@ -1,0 +1,1 @@
+<strong>&#x2713;</strong> <strong>@_ARDUINO_BOARD_NAME@</strong> [@_ARDUINO_BOARD_DISTINCT_ID@] [<a href="Tests/Results/@test_id@/@ARDUINO_BOARD_DISTINCT_ID@/BoardOptions.cmake">options</a>]<br/>

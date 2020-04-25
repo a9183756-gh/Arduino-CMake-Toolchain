@@ -92,7 +92,7 @@ function (SetupBoardToolchain boards_namespace board_id generate_dir)
 	endif()
 	if (EXISTS "${ARDUINO_BOARD_RUNTIME_PLATFORM_PATH}/programmers.txt")
 		properties_read("${ARDUINO_BOARD_RUNTIME_PLATFORM_PATH}/programmers.txt"
-            ard_programmers)
+			ard_programmers)
 	endif()
 
 	# Set build.arch
@@ -540,6 +540,233 @@ function (SetupBoardToolchain boards_namespace board_id generate_dir)
 endfunction()
 
 #==============================================================================
+# Typical workflow for setting up a platform. Common macro utilized by both
+# the Arduino-toolchain.cmake and Boards test setup in Tests/CMakeLists.txt,
+# as a precursor to the setup of board toolchain. Platform setup may involve
+# installation (if package management is enabled) and then indexing of the
+# boards on the platform.
+#
+# It is assumed that the ARDUINO_PLATFORM or ARDUINO_BOARD (that identifies
+# the platform) is set before calling this function. This may be done using
+# load_board_options or any other appropriate means.
+#
+# When this macro returns, it sets the ARDUINO_PLATFORM_ID to non-empty
+# value if there is only one platform that matched, and empty otherwise.
+# Before returning, all the boards are indexed in the 'ard_boards' namespace
+# by calling IndexArduinoBoards.
+#
+macro(PlatformSetupWorkflow)
+
+	#-------------------------------------------------------------------------
+	# Find ARDUINO_INSTALL_PATH, ARDUINO_PACKAGE_PATH and
+	# ARDUNIO_SKETCHBOOK_PATH
+	InitializeArduinoPackagePathList()
+
+	#-------------------------------------------------------------------------
+	# Find filter arguments that decides the platform/board for which the
+	# toolchain is setup.
+	set(_filter_args)
+	set(_pkg_id "")
+	set(_arch_id "")
+	set(_brd_id "")
+
+	# From ARDUINO_BOARD_OPTIONS_FILE...
+	if (NOT "${ARDUINO_BOARD_OPTIONS_FILE}" STREQUAL "")
+		set(ARDUINO_BOARD_OPTIONS_FILE "${ARDUINO_BOARD_OPTIONS_FILE}"
+			CACHE STRING "Arduino board options file")
+		include("${ARDUINO_BOARD_OPTIONS_FILE}")
+	endif()
+
+	# From ARDUINO_PACKAGER...
+	if (NOT "${ARDUINO_PACKAGER}" STREQUAL "")
+		set(ARDUINO_PACKAGER "${ARDUINO_PACKAGER}" CACHE STRING
+			"Arduino packager filter for the Arduino board")
+		set(_pkg_id "${ARDUINO_PACKAGER}")
+		list(APPEND _filter_args "PACKAGE_ID" "${_pkg_id}")
+	endif()
+
+	# From ARDUINO_PLATFORM...
+	if (NOT "${ARDUINO_PLATFORM}" STREQUAL "")
+		set(ARDUINO_PLATFORM "${ARDUINO_PLATFORM}" CACHE STRING
+			"Arduino platform filter for the Arduino board")
+		set(_pkg_id_ "")
+		set(_arch_id_ "")
+		string_split("${ARDUINO_PLATFORM}" "." _arch_id_ _pkg_id_ _ign)
+		if (NOT _arch_id_ STREQUAL "")
+			list(APPEND _filter_args "ARCH_ID" "${_arch_id_}")
+			set(_arch_id "${_arch_id_}")
+		endif()
+		if (NOT _pkg_id_ STREQUAL "")
+			list(APPEND _filter_args "PACKAGE_ID" "${_pkg_id_}")
+			set(_pkg_id "${_pkg_id_}")
+		endif()
+	endif()
+
+	# From ARDUINO_BOARD...
+	if (NOT "${ARDUINO_BOARD}" STREQUAL "")
+		set(ARDUINO_BOARD "${ARDUINO_BOARD}" CACHE STRING
+			"Arduino board for which the project is built for")
+
+		# For compatibility with old board options file
+		string(REGEX MATCH "\\[(.+)\\]$" match "${ARDUINO_BOARD}")
+	    if (match)
+			set(ARDUINO_BOARD "${CMAKE_MATCH_1}")
+	    endif()
+
+		set(_pkg_id_ "")
+		set(_arch_id_ "")
+		set(_brd_id_ "")
+		string_split("${ARDUINO_BOARD}" "." _brd_id_ _arch_id_ _pkg_id_ _ign)
+		if (NOT _brd_id_ STREQUAL "")
+			list(APPEND _filter_args "BOARD_ID" "${_brd_id_}")
+			set(_brd_id "${_brd_id_}")
+		endif()
+		if (NOT _arch_id_ STREQUAL "")
+			list(APPEND _filter_args "ARCH_ID" "${_arch_id_}")
+			set(_arch_id "${_arch_id_}")
+		endif()
+		if (NOT _pkg_id_ STREQUAL "")
+			list(APPEND _filter_args "PACKAGE_ID" "${_pkg_id_}")
+			set(_pkg_id "${_pkg_id_}")
+		endif()
+	endif()
+
+	#-------------------------------------------------------------------------
+	# Index all the pre-installed packages unless explicitly disabled
+	if (DEFINED ARDUINO_NO_INSTALLED_REFERENCES)
+		set(ARDUINO_NO_INSTALLED_REFERENCES
+			"${ARDUINO_NO_INSTALLED_REFERENCES}" CACHE STRING
+			"Set this option to ignore any installed platforms as references"
+			FORCE)
+	endif()
+	if (NOT "${ARDUINO_NO_INSTALLED_REFERENCES}")
+		IndexArduinoPackages()
+	endif()
+
+	#-------------------------------------------------------------------------
+	# Download and index the packages if board manager URL is provided
+	set(_boards_pkg_url "")
+	set(_boards_pkg_json "")
+	set(_ref_url_list)
+	set(_boards_indexed 0)
+	if (NOT "${ARDUINO_BOARD_MANAGER_URL}" STREQUAL "")
+
+		set(ARDUINO_BOARD_MANAGER_URL "${ARDUINO_BOARD_MANAGER_URL}"
+			CACHE STRING "Arduino Board Manager URL" FORCE)
+
+		# Split comma seperated list of URLs
+		string(REPLACE "," ";" _url_list
+			"${ARDUINO_BOARD_MANAGER_URL}")
+
+		# First one in the list should contain the required board
+		set(_boards_pkg_url "")
+		list(GET _url_list 0 _boards_pkg_url)
+		set(_ref_url_list "${_url_list}")
+		list(REMOVE_AT _ref_url_list 0)
+
+		# Before downloading, check if the required board is already
+		# installed in order to prevent any download. This is done
+		# only if unambiguous board ID (pkg.arch.prefix) is specified.
+		if (NOT _pkg_id STREQUAL "" AND NOT _arch_id STREQUAL "" AND
+			NOT _brd_id STREQUAL "" AND
+			NOT "${ARDUINO_NO_INSTALLED_REFERENCES}")
+			IndexArduinoBoards("ard_boards" ${_filter_args})
+			boards_get_list("ard_boards" boards_list)
+			list(LENGTH boards_list _boards_indexed)
+		endif()
+
+		# Download the package of the install URL
+		if (_boards_indexed) # Installed board already found
+			set(_boards_pkg_json "")
+			set(_ref_url_list "") # Installed references are used
+		elseif (NOT EXISTS "${_boards_pkg_url}")
+			BoardManager_DownloadPackage(${_boards_pkg_url}
+				JSON_FILES_LIST _boards_pkg_json REQUIRED)
+			IndexArduinoPackages(${_boards_pkg_json})
+			set(ARDUINO_ENABLE_PACKAGE_MANAGER TRUE)
+		else()
+			set(_boards_pkg_json "${_boards_pkg_url}")
+			IndexArduinoPackages(${_boards_pkg_json})
+			set(ARDUINO_ENABLE_PACKAGE_MANAGER TRUE)
+		endif()
+
+	endif()
+
+	#-------------------------------------------------------------------------
+	# Download and index any referenced packages provided
+	if (NOT "${ARDUINO_BOARD_MANAGER_REF_URL}" STREQUAL "")
+		set(ARDUINO_BOARD_MANAGER_REF_URL "${ARDUINO_BOARD_MANAGER_REF_URL}"
+			CACHE STRING
+			"Arduino Board Manager URL only for reference platforms/tools"
+			FORCE)
+		list(APPEND _ref_url_list ${ARDUINO_BOARD_MANAGER_REF_URL})
+	endif()
+
+	if (NOT "${_ref_url_list}" STREQUAL "" AND NOT _boards_indexed)
+		BoardManager_DownloadPackage(${_ref_url_list}
+			JSON_FILES_LIST _ref_json_files)
+		if (_ref_json_files)
+			IndexArduinoPackages(${_ref_json_files})
+		endif()
+	endif()
+
+	#-------------------------------------------------------------------------
+	# Find and install the necessary platform
+	if ("${ARDUINO_ENABLE_PACKAGE_MANAGER}")
+		list(APPEND _filter_args INSTALL_PREFERRED)
+	else()
+		list(APPEND _filter_args INSTALLED)
+	endif()
+	packages_find_platforms(pl_list JSON_FILES ${_boards_pkg_json}
+		${_filter_args})
+	list(LENGTH pl_list _num_platforms)
+	set(ARDUINO_PLATFORM_ID "")
+	if (_num_platforms EQUAL 1)
+		set(ARDUINO_PLATFORM_ID "${pl_list}")
+		packages_get_platform_property("${ARDUINO_PLATFORM_ID}" "/pl_path"
+			pl_path)
+		packages_get_platform_property("${ARDUINO_PLATFORM_ID}" "/pkg_id"
+			pkg_id)
+		packages_get_platform_property("${ARDUINO_PLATFORM_ID}" "/json_idx"
+			json_idx)
+		packages_get_property("${pkg_id}" "${json_idx}" "name" pkg_name)
+		packages_get_platform_property("${ARDUINO_PLATFORM_ID}" "architecture"
+			pl_arch)
+	endif()
+
+	if ("${ARDUINO_ENABLE_PACKAGE_MANAGER}")
+		# install the required platform (only one expected)
+		if (_num_platforms EQUAL 1)
+			BoardManager_InstallPlatform("${ARDUINO_PLATFORM_ID}"
+				RESULT_VARIABLE _result)
+			if (NOT _result EQUAL 0)
+				message(WARNING "Installing platform '${ARDUINO_PLATFORM_ID}' "
+					"failed!!! Build may fail!")
+			endif()
+		elseif(_num_platforms GREATER 0)
+			message(WARNING "Package manager install blocked as it requires "
+				" install multiple platforms (${pl_list}). Use an appropriate "
+				" board options file or limit the platform using the option "
+				" -DARDUINO_PLATFORM=<pl_id>.")
+		endif()
+	endif()
+
+	# Index the required boards
+	if (NOT _boards_indexed)
+		IndexArduinoBoards("ard_boards" JSON_FILES ${_boards_pkg_json}
+			${_filter_args})
+	endif()
+
+	# To allow the package manager to install any referenced platform
+	# during the setup of the toolchain, enable the package manager if
+	# there are reference URL's
+	if (NOT "${_ref_url_list}" STREQUAL "")
+		set(ARDUINO_ENABLE_PACKAGE_MANAGER TRUE)
+	endif()
+
+endmacro()
+
+#==============================================================================
 # Implementation functions (Subject to change. DO NOT USE)
 #
 
@@ -793,7 +1020,7 @@ function(_board_resolve_arduino_quoting str return_str)
 				set(_quote_needed 1)
 			elseif(_str_chr STREQUAL "'")
 				string_append(_curr_arg "${_str_chr}")
-                set(_quote_needed 1)
+				set(_quote_needed 1)
 			elseif(_str_chr MATCHES "${_space_chars}")
 				set(_state " ")
 				if(_quote_needed)

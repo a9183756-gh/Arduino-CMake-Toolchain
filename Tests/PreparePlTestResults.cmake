@@ -29,6 +29,31 @@ endif()
 
 include("${ARDUINO_TOOLCHAIN_DIR}/Arduino/Utilities/CommonUtils.cmake")
 
+# Escape the string for making it suitable as part of markdown string
+function(string_escape_markdown return_value)
+	string(REGEX REPLACE "([][(){}_`+*.|\\\\<>!])" "\\\\\\1" _value ${ARGN})
+	set("${return_value}" "${_value}" PARENT_SCOPE)
+endfunction()
+
+# Escape the string for making it suitable for HTML
+function(string_escape_html return_value)
+	string(REPLACE "&" "&#38;" _value ${ARGN})
+	string(REPLACE "\"" "&#34;" _value "${_value}")
+	string(REPLACE "/" "&#47;" _value "${_value}")
+	string(REPLACE "<" "&#60;" _value "${_value}")
+	string(REPLACE ">" "&#62;" _value "${_value}")
+	set("${return_value}" "${_value}" PARENT_SCOPE)
+endfunction()
+
+function(string_escape_output return_value)
+	if (_fmt_ext STREQUAL "md.in")
+		string_escape_markdown(_return_value ${ARGN})
+	else()
+		string_escape_html(_return_value ${ARGN})
+	endif()
+	set("${return_value}" "${_return_value}" PARENT_SCOPE)
+endfunction()
+
 set(_templates_dir "${ARDUINO_TOOLCHAIN_DIR}/Tests/Templates")
 set(_pl_build_dir "${ARDUINO_BUILD_ROOT_DIR}")
 set(_pl_sys_dir "${ARDUINO_SYSTEM_ROOT_DIR}")
@@ -44,15 +69,23 @@ set(upload_list "")
 set(upload-network_list "")
 set(program_list "")
 set(debug_list "")
+if (EXISTS "${_templates_dir}/SupportedBoards/SuppBoardItem.md.in")
+	set(_fmt_ext "md.in")
+else()
+	set(_fmt_ext "html.in")
+endif()
+macro(_load_template _fname)
+	file(READ "${_templates_dir}/SupportedBoards/${_fname}.${_fmt_ext}"
+		${_fname}_fmt)
+	if (_fmt_ext STREQUAL "md.in")
+		string(STRIP "${${_fname}_fmt}" ${_fname}_fmt)
+	endif()
+endmacro()
 foreach(_infile IN ITEMS SuppBoardItem FailBoardItem SkipBoardItem
 	SuppToolItem FailToolItem SkipToolItem UnexpectedOptions)
-	file(READ "${_templates_dir}/SupportedBoards/${_infile}.md.in"
-		${_infile}_fmt)
-	string(STRIP "${${_infile}_fmt}" ${_infile}_fmt)
+	_load_template(${_infile})
 endforeach()
-file(READ "${_templates_dir}/SupportedBoards/UnsuppTool.md.in"
-	UnsuppTool_fmt)
-string(STRIP "${UnsuppTool_fmt}" UnsuppTool_fmt)
+_load_template("UnsuppTool")
 include("${_pl_sys_dir}/PlatformInfo.cmake")
 
 # Initialize tools list
@@ -73,8 +106,8 @@ foreach(_board_id IN LISTS ARDUINO_BOARDS_LIST)
 	endif()
 
 	include("${_board_result_dir}/BoardInfo.cmake")
-	string_escape_markdown(_ARDUINO_BOARD_NAME "${ARDUINO_BOARD_NAME}")
-	string_escape_markdown(_ARDUINO_BOARD_DISTINCT_ID
+	string_escape_output(_ARDUINO_BOARD_NAME "${ARDUINO_BOARD_NAME}")
+	string_escape_output(_ARDUINO_BOARD_DISTINCT_ID
 		"${ARDUINO_BOARD_DISTINCT_ID}")
 	file(READ "${_board_result_dir}/result.txt" _result)
 	if (_result MATCHES "Skipped")
@@ -131,7 +164,7 @@ foreach(_tool_tgt IN ITEMS upload upload-network program debug)
 		list(GET "${_tool_tgt}_tool_names" "${_tool_idx}"
 			tool_name)
 		math(EXPR _tool_idx "${_tool_idx} + 1")
-		string_escape_markdown(_tool_name "${tool_name}")
+		string_escape_output(_tool_name "${tool_name}")
 		list(FIND "${_tool_tgt}_pass_id_list" "${tool_id}" _idx)
 		if (_idx LESS 0) # Failed tool
 			string(CONFIGURE "${FailToolItem_fmt}" _tool_item_str @ONLY)
@@ -190,20 +223,20 @@ string(CONFIGURE "${_pl_tbl_entry_fmt}" _pl_tbl_entry_str @ONLY)
 file(WRITE "${_pl_result_dir}/PlatformTblEntry.txt"
 	"${_pl_tbl_entry_str}")
 
+# Suuported boards tables
 if(test_result MATCHES "Skipped")
-	file(READ "${_templates_dir}/SupportedBoards/SkipPlEntry.md.in"
+	file(READ "${_templates_dir}/SupportedBoards/SkipPlEntry.${_fmt_ext}"
 		_tbl_entry_fmt)
 elseif (test_result MATCHES "FAIL")
-	file(READ "${_templates_dir}/SupportedBoards/FailPlEntry.md.in"
+	file(READ "${_templates_dir}/SupportedBoards/FailPlEntry.${_fmt_ext}"
 		_tbl_entry_fmt)
 else()
-	file(READ "${_templates_dir}/SupportedBoards/SuppPlEntry.md.in"
+	file(READ "${_templates_dir}/SupportedBoards/SuppPlEntry.${_fmt_ext}"
 		_tbl_entry_fmt)
 endif()
-string_escape_markdown(_pl_name "${pl_name}")
-string_escape_markdown(_pkg_maint "${pkg_maint}")
-string_escape_markdown(_pl_id "${pl_id}")
+string_escape_output(_pl_name "${pl_name}")
+string_escape_output(_pkg_maint "${pkg_maint}")
+string_escape_output(_pl_id "${pl_id}")
 string(CONFIGURE "${_tbl_entry_fmt}" _tbl_entry_str @ONLY)
-message("_tbl_entry_str:${_tbl_entry_str}")
 file(WRITE "${_pl_result_dir}/SupportedTblEntry.txt"
 	"${_tbl_entry_str}")
