@@ -34,6 +34,7 @@ set (size_match_idx_list "@SIZE_MATCH_IDX_LIST@")
 
 # For each of the elements whose size is to be printed
 math(EXPR _last_index "@SIZE_REGEX_COUNT@ - 1")
+set(is_size_exeeded FALSE)
 foreach(idx RANGE "${_last_index}")
 
 	list(GET size_regex_list ${idx} size_regex)
@@ -59,6 +60,9 @@ foreach(idx RANGE "${_last_index}")
 
 	# Print total size of the element
 	if (maximum_size GREATER 0)
+		if (tot_size GREATER maximum_size)
+			set(is_size_exeeded TRUE)
+		endif()
 		math(EXPR tot_size_percent "${tot_size} * 100 / ${maximum_size}")
 		message("${size_name} Size: ${tot_size} of ${maximum_size} bytes "
 			"(${tot_size_percent}%)")
@@ -69,3 +73,8 @@ foreach(idx RANGE "${_last_index}")
 endforeach()
 
 message("##################################################")
+
+if (is_size_exeeded)
+	message(FATAL_ERROR "Program exceeded the maximum size!!!")
+endif()
+
