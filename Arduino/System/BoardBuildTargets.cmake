@@ -157,17 +157,6 @@ function (target_link_arduino_libraries target_name)
 		endif()
 	endforeach()
 
-	# If target_name itself is an internally maintained arduino library,
-	# use that instead (Undocumented feature, should not be used)
-	if (NOT TARGET "${target_name}")
-		target_get_arduino_lib("_arduino_lib_${target_name}" _ard_lib_name)
-		if (_ard_lib_name)
-			set(target_name "_arduino_lib_${target_name}")
-		else()
-			message(FATAL_ERROR "${target_name} is not a CMake target")
-		endif()
-	endif()
-
 	# Index any local libraries (present within the local libraries folder),
 	# so that they are included in any libraries search.
 	# message("target_link_libraries indexing ${CMAKE_CURRENT_SOURCE_DIR}")
@@ -177,10 +166,24 @@ function (target_link_arduino_libraries target_name)
 		libraries_set_parent_scope("${_local_namespace}")
 	endif()
 
+	# If target_name itself is an internally maintained arduino library,
+	# use that instead (Undocumented feature, should not be used)
+	if (NOT TARGET "${target_name}")
+		_map_libs_to_lib_names(target_name)
+		string(MAKE_C_IDENTIFIER "${target_name}" _target_id)
+		target_get_arduino_lib("_arduino_lib_${_target_id}" _ard_lib_name)
+		if (_ard_lib_name)
+			set(target_name "_arduino_lib_${_target_id}")
+		else()
+			message(FATAL_ERROR "${target_name} is not a CMake target")
+		endif()
+	endif()
+
 	# Link with the explicitly provided libraries (without
 	# PRIVATE/PUBLIC/INTERFACE keywords
 	if (_list_DEFAULT)
 		set(empty_list)
+		_map_libs_to_lib_names(_list_DEFAULT)
 		_link_ard_lib_list("${target_name}" _list_DEFAULT ""
 			empty_list empty_list)
 	endif()
@@ -190,6 +193,7 @@ function (target_link_arduino_libraries target_name)
 	foreach(_link_type IN ITEMS PRIVATE PUBLIC INTERFACE)
 		if (_list_${_link_type})
 			set(empty_list)
+			_map_libs_to_lib_names(_list_${_link_type})
 			_link_ard_lib_list("${target_name}" _list_${_link_type}
 				"${_link_type}" empty_list empty_list)
 		endif()
@@ -372,25 +376,28 @@ endfunction()
 #                      [PATH_SUFFIXES suffix1 [suffix2 ...]]
 #                      [NO_DEFAULT_PATH]
 #                      [QUIET]
-#                      [EXCLUDE_LIB_NAMES] [EXCLUDE_INCLUDE_NAMES])
+#                      [EXCLUDE_LIB_NAMES] [EXCLUDE_INCLUDE_NAMES]
+#                      [LIBNAME_RESULT <var>])
 #
-# Search for the given arduino library in the standard and/or hinted paths. This
-# function is required only if there is better control needed in searching and
-# adding an arduino library explicitly (See 'add_custom_arduino_library'). Otherwise
-# 'target_link_arduino_libraries'is sufficient for simple usage.
+# Search for the given arduino library in the standard and/or hinted paths.
+# This function is required only if there is better control needed in searching
+# and adding an arduino library explicitly (See 'add_custom_arduino_library').
+# Otherwise 'target_link_arduino_libraries'is sufficient for simple usage.
 #
 # This function returns the path containing the arduino library found and it is
 # ensured that the returned library is compatible with the arduino board being 
 # built for.
 #
 # Arguments:
-# <lib> [IN]: Name of the arduino library to search
+# <lib> [IN]: Name of the arduino library to search. This can be either the
+# library name or the include name.
 # <return_lib_path> [OUT]: The path containing the library is returned in this 
 # variable
 #
 # Options:
 # HINTS: Specify directories to search in addition to the default locations.
-# PATH_SUFFIXES: Specify additional subdirectories to check below each directory 
+# PATH_SUFFIXES: Specify additional subdirectories to check below each
+# directory
 # location otherwise considered.
 # NO_DEFAULT_PATH: If specified, no default locations are added to the search
 # QUIET: If specified, an error will not be generated if the library is not
@@ -399,6 +406,8 @@ endfunction()
 # of the library found in library.properties
 # EXCLUDE_INCLUDE_NAMES: Given library name should not be matched with the
 # include file names of the library
+# LIBNAME_RESULT: Return the actual name of the library in this variable if
+# <lib> is an include name
 #
 # e.g. find_arduino_library(Wire lib_path)
 #
@@ -413,11 +422,14 @@ function(find_arduino_library lib return_lib_path)
 		EXCLUDE_LIB_NAMES
 		EXCLUDE_INCLUDE_NAMES)
 
+	set(_one_arg_options
+		LIBNAME_RESULT)
+
 	set(_multi_arg_options
 		HINTS
 		PATHS)
 
-	cmake_parse_arguments(parsed_args "${_flag_options}" ""
+	cmake_parse_arguments(parsed_args "${_flag_options}" "${_one_arg_options}"
 		"${_multi_arg_options}" ${ARGN})
 
 	# List indexed library namespaces which will be used for the search
@@ -452,24 +464,30 @@ function(find_arduino_library lib return_lib_path)
 
 	# message("Search namespaces: ${ard_libs_ns_list}")
 
-	if (NOT ARDUINO_LIB_${lib}_PATH)
+	if (DEFINED ARDUINO_LIB_${lib}_LIBNAME)
+		set(_lib_name "${ARDUINO_LIB_${lib}_LIBNAME}")
+	elseif(DEFINED ARDUINO_LIB_${lib}_PATH)
+		set(_lib_name "${lib}")
+	else()
 		_library_search_process("${ard_libs_ns_list}" "${lib}"
-			"ARDUINO_LIB_${lib}_PATH"
-			"${parsed_args_EXCLUDE_LIB_NAMES}"
+			_lib_path _lib_name "${parsed_args_EXCLUDE_LIB_NAMES}"
 			"${parsed_args_EXCLUDE_INCLUDE_NAMES}")
-		if (ARDUINO_LIB_${lib}_PATH OR NOT parsed_args_QUIET)
-			set(ARDUINO_LIB_${lib}_PATH "${ARDUINO_LIB_${lib}_PATH}"
-				CACHE STRING
-				"Path found containing the arduino library ${lib}" FORCE)
-		endif()
-		if (ARDUINO_LIB_${lib}_PATH)
-			message(STATUS "Found Arduino Library ${lib}: ${ARDUINO_LIB_${lib}_PATH}")
+		if (_lib_path)
+			if (NOT DEFINED ARDUINO_LIB_${_lib_name}_PATH)
+				message(STATUS "Found Arduino Library ${_lib_name}: "
+					"${_lib_path}")
+				set(ARDUINO_LIB_${_lib_name}_PATH "${_lib_path}" CACHE STRING
+					"Path found containing the arduino library ${_lib_name}")
+			endif()
+			if (NOT _lib_name STREQUAL lib)
+				set(ARDUINO_LIB_${lib}_LIBNAME "${_lib_name}" CACHE INTERNAL
+					"Actual library name of ${lib}")
+			endif()
 		endif()
 	endif()
 
-
 	# Error message if not found
-	if (NOT ARDUINO_LIB_${lib}_PATH)
+	if (NOT ARDUINO_LIB_${_lib_name}_PATH)
 		if (NOT parsed_args_QUIET)
 			message(SEND_ERROR "Arduino library ${lib} could not be found in "
 					"${search_paths}")
@@ -479,7 +497,10 @@ function(find_arduino_library lib return_lib_path)
 	endif()
 
 	# message("find_arduino_library(\"${lib}\":${ARDUINO_LIB_${lib}_PATH})")
-	set("${return_lib_path}" "${ARDUINO_LIB_${lib}_PATH}" PARENT_SCOPE)
+	if (NOT "${parsed_args_LIBNAME_RESULT}" STREQUAL "")
+		set("${parsed_args_LIBNAME_RESULT}" "${_lib_name}" PARENT_SCOPE)
+	endif()
+	set("${return_lib_path}" "${ARDUINO_LIB_${_lib_name}_PATH}" PARENT_SCOPE)
 
 endfunction()
 
@@ -591,39 +612,47 @@ function(_get_auto_link_libs target_name src_list_var ignore_list_var
 
 	get_target_property(target_source_dir "${target_name}" SOURCE_DIR)
 
+	set(_all_includes)
 	foreach(file IN LISTS _target_sources)
 		get_filename_component(_file_path "${file}" ABSOLUTE
 			BASE_DIR "${target_source_dir}")
 		get_source_file_included_headers("${_file_path}" _includes)
 		add_configure_dependency("${_file_path}")
-		# message("get_source_file_included_headers(${_file_path}:${_includes}:)")
-		foreach(inc IN LISTS _includes ITEMS "Arduino")
-			list(FIND ${ignore_list_var} "${inc}" _idx)
-			# Check if to be ignored
-			if (_idx LESS 0 AND NOT "${_target_ard_lib_name}" STREQUAL "${inc}")
-				if (inc STREQUAL "Arduino")
-					set(_lib "core")
-				else()
-					set(_lib "${inc}")
-				endif()
-				list(FIND override_names "${_lib}" _idx)
-				if (_idx GREATER_EQUAL 0)
-					list(GET ${override_list_var} ${_idx} _cust_lib)
-					list(APPEND _ret_list "${_cust_lib}")
-				elseif(_lib STREQUAL "core")
-					list(APPEND _ret_list "core")
-				else()
-					find_arduino_library("${inc}" _lib_path QUIET
-						EXCLUDE_LIB_NAMES)
-					if (_lib_path)
-						list(APPEND _ret_list "${inc}")
-					endif()
-				endif()
-			endif()
-		endforeach()
+		list(APPEND _all_includes ${_includes})
 	endforeach()
 
-	if (_ret_list)
+	if (NOT "${_all_includes}" STREQUAL "")
+		list(REMOVE_DUPLICATES _all_includes)
+	endif()
+	# message("get_source_file_included_headers(${_all_includes}:)")
+	foreach(inc IN LISTS _all_includes ITEMS "Arduino")
+		list(FIND ${ignore_list_var} "${inc}" _idx)
+		# Check if to be ignored
+		if (_idx LESS 0)
+			if (inc STREQUAL "Arduino")
+				set(_lib "core")
+			else()
+				_map_libs_to_lib_names(inc EXCLUDE_LIB_NAMES QUIET)
+				set(_lib "${inc}")
+			endif()
+			if (_lib STREQUAL "")
+				continue()
+			endif()
+			if ("${_target_ard_lib_name}" STREQUAL "${_lib}")
+				# No linking with self
+				continue()
+			endif()
+			list(FIND override_names "${_lib}" _idx)
+			if (_idx GREATER_EQUAL 0)
+				list(GET ${override_list_var} ${_idx} _cust_lib)
+				list(APPEND _ret_list "${_cust_lib}")
+			else()
+				list(APPEND _ret_list "${_lib}")
+			endif()
+		endif()
+	endforeach()
+
+	if (NOT "${_ret_list}" STREQUAL "")
 		list(REMOVE_DUPLICATES _ret_list)
 	endif()
 	set("${ret_list_var}" "${_ret_list}" PARENT_SCOPE)
@@ -634,8 +663,13 @@ endfunction()
 function(_link_ard_lib_list target_name lib_list_var link_type
 	ignore_list_var override_list_var)
 
+	#message("_link_ard_lib_list \"${target_name}\" \"${${lib_list_var}}\"")
+
 	set(_link_targets)
 	foreach(_lib IN LISTS ${lib_list_var})
+
+		# Get a suitable name for the target correspoinding to lib
+		string(MAKE_C_IDENTIFIER "${_lib}" _lib_id)
 
 		# If the library name is already a target building an arduino
 		# library, use that. Typically used for convenience or for
@@ -643,25 +677,25 @@ function(_link_ard_lib_list target_name lib_list_var link_type
 		target_get_arduino_lib("${_lib}" _ard_lib_name)
 		if (_ard_lib_name)
 			set(_link_target "${_lib}")
-		elseif (TARGET "_arduino_lib_${_lib}")
+		elseif (TARGET "_arduino_lib_${_lib_id}")
 			# Already having the internal library
-			set(_link_target "_arduino_lib_${_lib}")
+			set(_link_target "_arduino_lib_${_lib_id}")
 		elseif ("${_lib}" STREQUAL "core")
 			# library is core, add a library with core sources
 			_add_internal_arduino_core(_arduino_lib_core)
 			set(_link_target "_arduino_lib_core")
 		else()
 			# add the library with its sources
-			_add_internal_arduino_library("_arduino_lib_${_lib}"
+			_add_internal_arduino_library("_arduino_lib_${_lib_id}"
 				"${_lib}")
-			if (NOT TARGET "_arduino_lib_${_lib}")
+			if (NOT TARGET "_arduino_lib_${_lib_id}")
 				return()
 			endif()
-			target_link_arduino_libraries("_arduino_lib_${_lib}"
+			target_link_arduino_libraries("_arduino_lib_${_lib_id}"
 				AUTO_PUBLIC
 				IGNORE ${${ignore_list_var}}
 				OVERRIDE ${${override_list_var}})
-			set(_link_target "_arduino_lib_${_lib}")
+			set(_link_target "_arduino_lib_${_lib_id}")
 		endif()
 
 		if (NOT "${_link_target}" STREQUAL "${target_name}")
@@ -685,10 +719,12 @@ function(_add_internal_arduino_library target lib)
 
 	set(_lib_path "${parsed_args_PATH}")
 	if (NOT _lib_path)
-		find_arduino_library("${lib}" _lib_path)
+		find_arduino_library("${lib}" _lib_path LIBNAME_RESULT lib)
 		if (NOT _lib_path)
 			return()
 		endif()
+	else()
+		# TODO Parse the library name from library.properties in the path?
 	endif()
 
 	# Index the source files
@@ -824,8 +860,8 @@ function(_find_linked_arduino_libs target_name ret_list_var)
 endfunction()
 
 # Search algorithm for Arduino libraries
-function(_library_search_process ns_list lib return_var is_excl_lib_name
-	is_excl_inc_name)
+function(_library_search_process ns_list lib return_path return_lib_name
+	is_excl_lib_name is_excl_inc_name)
 
 	# message("Searching for ${lib}...")
 
@@ -837,6 +873,7 @@ function(_library_search_process ns_list lib return_var is_excl_lib_name
 	set(matched_folder_priority 7) # Initialize to the lowest folder priority
 	set(matched_arch_priority 3) # Initialize to the lowest arch priority
 	set(matched_lib_path "") # The matched library path
+	set(matched_lib_name "") # The matched library name
 
 	foreach(_ns IN LISTS ns_list)
 		libraries_get_list("${_ns}" _lib_list)
@@ -860,23 +897,17 @@ function(_library_search_process ns_list lib return_var is_excl_lib_name
 				set(lib_priority 1)
 			elseif(NOT is_excl_inc_name)
 				# Check for match with the include names
-				foreach(_list IN ITEMS _lib_exp_inc_list _lib_imp_inc_list)
-					foreach(_lib_inc IN LISTS ${_list})
-						string(REGEX MATCH "^(.+)\\.[^.]+$" _match
-							"${_lib_inc}")
-						if (NOT "${_match}" STREQUAL "")
-							set(_lib_inc "${CMAKE_MATCH_1}")
-						endif()
-						if ("${lib}" STREQUAL "${_lib_inc}")
-							# 'lib' is a include name
-							set(lib_priority 2)
-						endif()
-					endforeach()
+				_find_match_lib_inc_name("${lib}" _lib_exp_inc_list _found)
+				if (NOT _found)
 					set(_imp_inc_match TRUE)
-				endforeach()
+					_find_match_lib_inc_name("${lib}" _lib_imp_inc_list _found)
+				endif()
+				if (_found)
+					set(lib_priority 2)
+				endif()
 			endif()
 
-			# message("Match1 ${lib}:${_lib_path}:${lib_priority}")
+			# message("Match1 ${lib}:${_lib_path}:${lib_priority}:${_imp_inc_match}")
 			# Library is not matching with any library or include name
 			if (lib_priority EQUAL 0)
 				continue()
@@ -933,6 +964,7 @@ function(_library_search_process ns_list lib return_var is_excl_lib_name
 			# Check for better lib priority
 			if (${lib_priority} LESS ${matched_lib_priority})
 				set(matched_lib_path "${_lib_path}")
+				set(matched_lib_name "${_lib_name}")
 				set(matched_lib_priority "${lib_priority}")
 				set(matched_folder_priority "${folder_name_priority}")
 				set(matched_arch_priority "${arch_match_priority}")
@@ -944,6 +976,7 @@ function(_library_search_process ns_list lib return_var is_excl_lib_name
 			# Check for better folder name priority
 			if (${folder_name_priority} LESS ${matched_folder_priority})
 				set(matched_lib_path "${_lib_path}")
+				set(matched_lib_name "${_lib_name}")
 				set(matched_folder_priority "${folder_name_priority}")
 				set(matched_arch_priority "${arch_match_priority}")
 				continue()
@@ -955,6 +988,7 @@ function(_library_search_process ns_list lib return_var is_excl_lib_name
 			# Check for optimized architecture
 			if (${arch_match_priority} LESS ${matched_arch_priority})
 				set(matched_lib_path "${_lib_path}")
+				set(matched_lib_name "${_lib_name}")
 				set(matched_arch_priority "${arch_match_priority}")
 				continue()
 			elseif (NOT ${arch_match_priority} EQUAL ${matched_arch_priority})
@@ -966,15 +1000,17 @@ function(_library_search_process ns_list lib return_var is_excl_lib_name
 
 	if (NOT matched_lib_path)
 		# message("${lib} Not found!!!")
-		set ("${return_var}" "${lib}-NOTFOUND" PARENT_SCOPE)
+		set ("${return_path}" "${lib}-NOTFOUND" PARENT_SCOPE)
 		return()
 	endif()
 
 	# message("${lib} found!!!")
-	set ("${return_var}" "${matched_lib_path}" PARENT_SCOPE)
+	set ("${return_path}" "${matched_lib_path}" PARENT_SCOPE)
+	set ("${return_lib_name}" "${matched_lib_name}" PARENT_SCOPE)
 
 endfunction()
 
+# Index any libraries within the current directory
 function(_index_local_libraries return_namespace return_is_indexed)
 
 	set(_local_lib_paths)
@@ -1007,4 +1043,46 @@ function(_index_local_libraries return_namespace return_is_indexed)
 	else()
 		set("${return_namespace}" "" PARENT_SCOPE)
 	endif()
+endfunction()
+
+# Find a matching include name for the given lib
+function(_find_match_lib_inc_name lib_name inc_list_var return_flag)
+	set(_found FALSE)
+	foreach(_lib_inc IN LISTS ${inc_list_var})
+		string(REGEX MATCH "^(.+)\\.[^.]+$" _match "${_lib_inc}")
+		if (NOT "${_match}" STREQUAL "")
+			set(_lib_inc "${CMAKE_MATCH_1}")
+		endif()
+		if ("${lib_name}" STREQUAL "${_lib_inc}")
+			set(_found TRUE)
+			break()
+		endif()
+	endforeach()
+	set("${return_flag}" "${_found}" PARENT_SCOPE)
+endfunction()
+
+# target_link_arduino_libraries API takes library names as well. Here we
+# convert the given names in the API to library names using 
+# find_arduino_library. This is to ensure that we use the same target name
+# for a library regardless of whether it is linked with target name or 
+# include name.
+function(_map_libs_to_lib_names libs_list_var)
+	set(_lib_names_list)
+	foreach(_lib IN LISTS "${libs_list_var}")
+		if ("${_lib}" STREQUAL "core")
+			list(APPEND _lib_names_list "${_lib}")
+			continue()
+		endif()
+		target_get_arduino_lib("${_lib}" _ard_lib_name)
+		if (_ard_lib_name)
+			list(APPEND _lib_names_list "${_lib}")
+		else()
+			find_arduino_library("${_lib}" _lib_path
+				LIBNAME_RESULT _lib_name ${ARGN})
+			if (_lib_path)
+				list(APPEND _lib_names_list "${_lib_name}")
+			endif()
+		endif()
+	endforeach()
+	set("${libs_list_var}" "${_lib_names_list}" PARENT_SCOPE)
 endfunction()
