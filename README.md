@@ -142,6 +142,14 @@ Resolution: Please try with release-1.1-dev branch or otherwise, temporary fixes
 
 Resolution: Please try with release-1.1-dev branch.
 
+**3. Some libraries are not detected by *target_link_arduino_libraries***
+
+Currently, *target_link_arduino_libraries* takes only include names (i.e. the name of the header file without extension). If the include name does not match with the library name (as mentioned in *library.properties* of the library), the detection of the library fails.
+
+Workaround: Rename the library folder to the include name and use include name in *target_link_arduino_libraries*.
+
+Resolution: Available, as mentioned in issue [#19](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/issues/19), and will soon be merged into release-1.1-dev branch.
+
 ## How it works
 
 This toolchain follows the build process described in [Arduino Build Process](https://arduino.github.io/arduino-cli/sketch-build-process/), and processes the JSON, platform.txt and boards.txt files correponding to the Arduino platform as specified in the documentation [Arduino IDE 1.5 3rd party Hardware specification](https://arduino.github.io/arduino-cli/platform-specification/).
