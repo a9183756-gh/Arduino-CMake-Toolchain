@@ -216,8 +216,8 @@ function (SetupBoardToolchain boards_namespace board_id generate_dir)
 			if (NOT _ref_tool_pkg_name STREQUAL last_tool_pkg_name)
 				_board_find_ref_platform("${_ref_tool_pkg_name}" "${pl_arch}"
 					_ref_pl)
-				_board_load_ref_platform_prop(ard_tool_local "${_ref_pl}"
-					RESET)
+				properties_reset(ard_tool_local)
+				_board_load_ref_platform_prop(ard_tool_local "${_ref_pl}")
 				set(last_tool_pkg_name "${_ref_tool_pkg_name}")
 			endif()
 			# Transfer the tool properties from the referenced package

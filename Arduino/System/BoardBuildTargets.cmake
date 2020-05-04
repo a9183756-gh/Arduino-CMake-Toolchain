@@ -11,6 +11,7 @@ INCLUDE(Arduino/Utilities/CommonUtils)
 INCLUDE(Arduino/Utilities/SourceLocator)
 include(Arduino/Utilities/SourceDependency)
 include(Arduino/System/BoardToolchain)
+include(Arduino/System/LibraryIndex)
 
 # Define ARDUINO_LIB property on the target, to identify Arduino Library
 # targets.
@@ -165,6 +166,15 @@ function (target_link_arduino_libraries target_name)
 		else()
 			message(FATAL_ERROR "${target_name} is not a CMake target")
 		endif()
+	endif()
+
+	# Index any local libraries (present within the local libraries folder),
+	# so that they are included in any libraries search.
+	# message("target_link_libraries indexing ${CMAKE_CURRENT_SOURCE_DIR}")
+	_index_local_libraries(_local_namespace _is_indexed)
+	if (_is_indexed)
+		# Cache the search in the parent scope as well
+		libraries_set_parent_scope("${_local_namespace}")
 	endif()
 
 	# Link with the explicitly provided libraries (without
@@ -361,7 +371,8 @@ endfunction()
 #                      [HINTS path1 [path2 ...]]
 #                      [PATH_SUFFIXES suffix1 [suffix2 ...]]
 #                      [NO_DEFAULT_PATH]
-#                      [QUIET])
+#                      [QUIET]
+#                      [EXCLUDE_LIB_NAMES] [EXCLUDE_INCLUDE_NAMES])
 #
 # Search for the given arduino library in the standard and/or hinted paths. This
 # function is required only if there is better control needed in searching and
@@ -384,6 +395,10 @@ endfunction()
 # NO_DEFAULT_PATH: If specified, no default locations are added to the search
 # QUIET: If specified, an error will not be generated if the library is not
 # found
+# EXCLUDE_LIB_NAMES: Given library name should not be matched with the name
+# of the library found in library.properties
+# EXCLUDE_INCLUDE_NAMES: Given library name should not be matched with the
+# include file names of the library
 #
 # e.g. find_arduino_library(Wire lib_path)
 #
@@ -392,30 +407,56 @@ endfunction()
 # using the 'add_custom_arduino_library' function.
 function(find_arduino_library lib return_lib_path)
 
-	cmake_parse_arguments(parsed_args "NO_DEFAULT_PATH;QUIET" "" "HINTS;PATHS;PATH_SUFFIXES" ${ARGN})
+	set(_flag_options
+		NO_DEFAULT_PATH
+		QUIET
+		EXCLUDE_LIB_NAMES
+		EXCLUDE_INCLUDE_NAMES)
 
-	unset(search_paths)
-	if (NOT parsed_args_NO_DEFAULT_PATH)
-		list(APPEND search_paths
-			"${CMAKE_CURRENT_SOURCE_DIR}"
-			"${CMAKE_SOURCE_DIR}"
-			${ARDUINO_LIBRARIES_SEARCH_PATHS_EXTRA}
-			${ARDUINO_PACKAGE_MANAGER_PATH}
-			${ARDUINO_SKETCHBOOK_PATH}
-			${ARDUINO_BOARD_RUNTIME_PLATFORM_PATH}
-			${ARDUINO_CORE_SPECIFIC_PLATFORM_PATH}
-			${ARDUINO_INSTALL_PATH}
-		)
-	endif()
+	set(_multi_arg_options
+		HINTS
+		PATHS)
 
-	list(APPEND search_paths
+	cmake_parse_arguments(parsed_args "${_flag_options}" ""
+		"${_multi_arg_options}" ${ARGN})
+
+	# List indexed library namespaces which will be used for the search
+	set(ard_libs_ns_list)
+
+	# Index libraries from the hinted paths
+	set(_hint_paths
 		${parsed_args_HINTS}
 		${parsed_args_PATHS}
 	)
+	if (NOT "${_hint_paths}" STREQUAL "")
+		IndexArduinoLibraries(ards_libs_custom ${_hint_paths}
+			${parsed_args_UNPARSED_ARGUMENTS}
+			COMMENT "Indexing Arduino libraries for ${_hint_paths}")
+		list(APPEND ard_libs_ns_list ards_libs_custom)
+	endif()
+
+	# Add namespaces that contain libraries indexed from default paths
+	if (NOT parsed_args_NO_DEFAULT_PATH)
+
+		# Index local libraries if not already done within the scope
+		# and add it to the list of library namespaces
+		_index_local_libraries(_local_namespace _ign)
+		if (NOT _local_namespace STREQUAL "")
+			list(APPEND ard_libs_ns_list "${_local_namespace}")
+		endif()
+
+		# Add globally indexed libraries namespace
+		list(APPEND ard_libs_ns_list ards_libs_global)
+
+	endif()
+
+	# message("Search namespaces: ${ard_libs_ns_list}")
 
 	if (NOT ARDUINO_LIB_${lib}_PATH)
-		_library_search_process("${lib}" search_paths parsed_args_PATH_SUFFIXES
-			"ARDUINO_LIB_${lib}_PATH")
+		_library_search_process("${ard_libs_ns_list}" "${lib}"
+			"ARDUINO_LIB_${lib}_PATH"
+			"${parsed_args_EXCLUDE_LIB_NAMES}"
+			"${parsed_args_EXCLUDE_INCLUDE_NAMES}")
 		if (ARDUINO_LIB_${lib}_PATH OR NOT parsed_args_QUIET)
 			set(ARDUINO_LIB_${lib}_PATH "${ARDUINO_LIB_${lib}_PATH}"
 				CACHE STRING
@@ -522,10 +563,6 @@ endfunction()
 # Implementation functions (Subject to change. DO NOT USE)
 #
 
-SET(ARDUINO_LIBRARIES_SEARCH_PATHS_EXTRA "" CACHE PATH
-	"Paths to search for Arduino libraries in addition to standard paths"
-)
-
 # Get the arduino libraries that are included by the given target
 # or source list
 function(_get_auto_link_libs target_name src_list_var ignore_list_var
@@ -576,7 +613,8 @@ function(_get_auto_link_libs target_name src_list_var ignore_list_var
 				elseif(_lib STREQUAL "core")
 					list(APPEND _ret_list "core")
 				else()
-					find_arduino_library("${inc}" _lib_path QUIET)
+					find_arduino_library("${inc}" _lib_path QUIET
+						EXCLUDE_LIB_NAMES)
 					if (_lib_path)
 						list(APPEND _ret_list "${inc}")
 					endif()
@@ -785,34 +823,67 @@ function(_find_linked_arduino_libs target_name ret_list_var)
 	set("${ret_list_var}" "${_ret_list}" PARENT_SCOPE)
 endfunction()
 
-# Search logic for Arduino libraries
-function(_library_search_process lib search_paths_var search_suffixes_var return_var)
+# Search algorithm for Arduino libraries
+function(_library_search_process ns_list lib return_var is_excl_lib_name
+	is_excl_inc_name)
 
 	# message("Searching for ${lib}...")
 
 	# convert lib to a string that can be used in regular expression match
-	string(REPLACE "\\" "\\\\" lib_regex "${lib}")
-	string(REGEX REPLACE "([].$[*+?|()])" "\\1" lib_regex "${lib_regex}")
+	string_escape_regex(lib_regex "${lib}")
+
 	# message("lib_regex:${lib_regex}")
-	set(matched_folder_priority 6) # Initialize to higher value of all priorities
-	set(matched_arch_priority 3) # Initialize to higher value of all priorities
+	set(matched_lib_priority 3) # Initialize to the lowest lib priority
+	set(matched_folder_priority 7) # Initialize to the lowest folder priority
+	set(matched_arch_priority 3) # Initialize to the lowest arch priority
 	set(matched_lib_path "") # The matched library path
 
-	foreach(path IN LISTS "${search_paths_var}")
+	foreach(_ns IN LISTS ns_list)
+		libraries_get_list("${_ns}" _lib_list)
 
-		set(glob_expressions)
-		foreach(suffix IN LISTS "${search_suffixes_var}" ITEMS "libraries" "dependencies")
-			list(APPEND glob_expressions "${path}/${suffix}/*")
-		endforeach()
+		foreach(_lib_id IN LISTS _lib_list)
 
-		file(GLOB dir_list ${glob_expressions})
-		foreach(dir IN LISTS dir_list)
-			if (NOT IS_DIRECTORY "${dir}" OR NOT EXISTS "${dir}/library.properties")
+			libraries_get_property("${_ns}" "${_lib_id}" "/name" _lib_name)
+			libraries_get_property("${_ns}" "${_lib_id}" "/path" _lib_path)
+			libraries_get_property("${_ns}" "${_lib_id}" "/architectures"
+				_lib_arch_list)
+			libraries_get_property("${_ns}" "${_lib_id}" "/exp_includes"
+				_lib_exp_inc_list)
+			libraries_get_property("${_ns}" "${_lib_id}" "/imp_includes"
+				_lib_imp_inc_list)
+
+			# Check for library name match
+			set(lib_priority 0)
+			set(_imp_inc_match FALSE)
+			if ("${lib}" STREQUAL "${_lib_name}" AND NOT is_excl_lib_name)
+				# 'lib' is a library name and not include name
+				set(lib_priority 1)
+			elseif(NOT is_excl_inc_name)
+				# Check for match with the include names
+				foreach(_list IN ITEMS _lib_exp_inc_list _lib_imp_inc_list)
+					foreach(_lib_inc IN LISTS ${_list})
+						string(REGEX MATCH "^(.+)\\.[^.]+$" _match
+							"${_lib_inc}")
+						if (NOT "${_match}" STREQUAL "")
+							set(_lib_inc "${CMAKE_MATCH_1}")
+						endif()
+						if ("${lib}" STREQUAL "${_lib_inc}")
+							# 'lib' is a include name
+							set(lib_priority 2)
+						endif()
+					endforeach()
+					set(_imp_inc_match TRUE)
+				endforeach()
+			endif()
+
+			# message("Match1 ${lib}:${_lib_path}:${lib_priority}")
+			# Library is not matching with any library or include name
+			if (lib_priority EQUAL 0)
 				continue()
 			endif()
 
 			# Check for folder name match
-			get_filename_component(folder_name "${dir}" NAME)
+			get_filename_component(folder_name "${_lib_path}" NAME)
 			if ("${folder_name}" STREQUAL "${lib}")
 				set(folder_name_priority 1)
 			elseif ("${folder_name}" STREQUAL "${lib}-master")
@@ -823,21 +894,21 @@ function(_library_search_process lib search_paths_var search_suffixes_var return
 				set(folder_name_priority 4)
 			elseif("${folder_name}" MATCHES ".*${lib_regex}.*")
 				set(folder_name_priority 5)
-			else()
+			elseif(_imp_inc_match)
+				# For implicit include match, folder should match in order to
+				# avoid unnecessary linking during auto linking
 				continue()
+			else()
+				set(folder_name_priority 6)
 			endif()
 
-			# message("Folder match ${lib}:${dir}:${folder_name_priority}")
+			# message("Match2 ${lib}:${_lib_path}:${folder_name_priority}")
 
 			# Check for architecture match
-			file(STRINGS "${dir}/library.properties" arch_str REGEX "architectures=.*")
-			string(REGEX MATCH "architectures=(.*)" arch_list "${arch_str}")
-			string(REPLACE "," ";" arch_list "${CMAKE_MATCH_1}")
 			string(TOUPPER "${ARDUINO_BOARD_BUILD_ARCH}" board_arch)
-
-			if (arch_list)
-				set(arch_match_priority 0) # Match should happen inside the below foreach loop
-				foreach(arch IN LISTS arch_list)
+			if (NOT "${_lib_arch_list}" STREQUAL "")
+				set(arch_match_priority 0) # Match should happen in the loop
+				foreach(arch IN LISTS _lib_arch_list)
 					string(STRIP "${arch}" arch)
 					string(TOUPPER "${arch}" arch)
 					if ("${arch}" STREQUAL "${board_arch}")
@@ -854,43 +925,86 @@ function(_library_search_process lib search_paths_var search_suffixes_var return
 				set(arch_match_priority 2) # unspecified arch assumed to match
 			endif()
 
-			# message("Folder/Arch match ${lib}:${dir}:"
+			# message("Folder/Arch match ${lib}:${_lib_path}:"
+			#	"${lib_priority}/${matched_lib_priority}:"
 			#	"${folder_name_priority}/${matched_folder_priority}:"
 			#	"${arch_match_priority}/${matched_arch_priority}")
 
-			# Check for better folder name priority
-			if (${folder_name_priority} LESS ${matched_folder_priority})
-				set(matched_lib_path "${dir}")
+			# Check for better lib priority
+			if (${lib_priority} LESS ${matched_lib_priority})
+				set(matched_lib_path "${_lib_path}")
+				set(matched_lib_priority "${lib_priority}")
 				set(matched_folder_priority "${folder_name_priority}")
 				set(matched_arch_priority "${arch_match_priority}")
+				continue()
+			elseif (NOT ${lib_priority} EQUAL ${matched_lib_priority})
+				continue()
+			endif()
+
+			# Check for better folder name priority
+			if (${folder_name_priority} LESS ${matched_folder_priority})
+				set(matched_lib_path "${_lib_path}")
+				set(matched_folder_priority "${folder_name_priority}")
+				set(matched_arch_priority "${arch_match_priority}")
+				continue()
+			elseif (NOT ${folder_name_priority} EQUAL
+				${matched_folder_priority})
 				continue()
 			endif()
 
 			# Check for optimized architecture
 			if (${arch_match_priority} LESS ${matched_arch_priority})
-				set(matched_lib_path "${dir}")
-				set(matched_folder_priority "${folder_name_priority}")
+				set(matched_lib_path "${_lib_path}")
 				set(matched_arch_priority "${arch_match_priority}")
+				continue()
+			elseif (NOT ${arch_match_priority} EQUAL ${matched_arch_priority})
 				continue()
 			endif()
 
 		endforeach()
-
 	endforeach()
 
-
 	if (NOT matched_lib_path)
+		# message("${lib} Not found!!!")
 		set ("${return_var}" "${lib}-NOTFOUND" PARENT_SCOPE)
 		return()
 	endif()
 
-	# Although we got the match, let us search for the required header within the folder
-	file(GLOB_RECURSE lib_header_path "${matched_lib_path}/${lib}.h*")
-	if (NOT lib_header_path)
-		set ("${return_var}" "${lib}-NOTFOUND" PARENT_SCOPE)
-		return()
-	endif()
-
+	# message("${lib} found!!!")
 	set ("${return_var}" "${matched_lib_path}" PARENT_SCOPE)
 
+endfunction()
+
+function(_index_local_libraries return_namespace return_is_indexed)
+
+	set(_local_lib_paths)
+	if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libraries" OR
+		EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/dependencies")
+		list(APPEND _local_lib_paths "${CMAKE_CURRENT_SOURCE_DIR}")
+	endif()
+	list(APPEND _local_lib_paths ${ARDUINO_LIBRARIES_SEARCH_PATHS_EXTRA})
+	properties_get_value(ards_libs_global "lib_search_root_list"
+		_global_indexed_paths QUIET) # TODO
+	foreach(_path IN LISTS _global_indexed_paths)
+		if (NOT "${_local_lib_paths}" STREQUAL "")
+			list(REMOVE_ITEM _local_lib_paths "${_path}")
+		endif()
+	endforeach()
+	set("${return_is_indexed}" FALSE PARENT_SCOPE)
+	if (NOT "${_local_lib_paths}" STREQUAL "")
+		properties_get_value(ards_libs_local "lib_search_root_list"
+			_local_indexed_paths QUIET) # TODO
+		# message("_local_lib_paths:${_local_lib_paths}")
+		# message("_local_indexed_paths:${_local_indexed_paths}")
+		if (NOT "${_local_lib_paths}" STREQUAL "${_local_indexed_paths}")
+			IndexArduinoLibraries(ards_libs_local ${_local_lib_paths}
+				COMMENT "Indexing local Arduino libraries for "
+				"${CMAKE_CURRENT_SOURCE_DIR}")
+			libraries_set_parent_scope(ards_libs_local)
+			set("${return_is_indexed}" TRUE PARENT_SCOPE)
+		endif()
+		set("${return_namespace}" ards_libs_local PARENT_SCOPE)
+	else()
+		set("${return_namespace}" "" PARENT_SCOPE)
+	endif()
 endfunction()

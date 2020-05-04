@@ -26,3 +26,17 @@ set(CMAKE_SYSTEM_LIBRARY_PATH "/lib")
 # message("ARDUINO_SYSTEM_PROGRAM_PATH:${ARDUINO_SYSTEM_PROGRAM_PATH}")
 set(CMAKE_SYSTEM_PROGRAM_PATH ${ARDUINO_SYSTEM_PROGRAM_PATH})
 
+# Library indexing once after the board setup
+if (NOT _LIBRARY_INDEXING_COMPLETED)
+
+	# No need of indexing in try compile context?
+	get_property(_in_try_compile GLOBAL PROPERTY IN_TRY_COMPILE)
+	if (NOT _in_try_compile)
+		# Cached global library search
+		IndexArduinoLibraries(ards_libs_global
+			COMMENT "Indexing Arduino libraries for the project")
+	endif()
+	set(_LIBRARY_INDEXING_COMPLETED TRUE)
+
+endif()
+

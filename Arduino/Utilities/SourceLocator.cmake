@@ -177,10 +177,15 @@ endfunction()
 #=============================================================================#
 function(find_library_header_files _base_path _return_var)
 
+	cmake_parse_arguments(_args "NO_RECURSE" "" "" ${ARGN})
     if (EXISTS "${_base_path}/src") # 'src' sub-dir exists and should contain sources
 
         # Headers are always searched recursively under the 'src' sub-dir
-        find_header_files("${_base_path}/src" headers RECURSE)
+		if (NOT _args_NO_RECURSE)
+	        find_header_files("${_base_path}/src" headers RECURSE)
+		else()
+	        find_header_files("${_base_path}/src" headers)
+		endif()
 
     else ()
 
