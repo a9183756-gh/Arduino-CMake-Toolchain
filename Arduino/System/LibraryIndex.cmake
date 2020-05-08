@@ -66,7 +66,7 @@ function(IndexArduinoLibraries namespace)
 			list(APPEND glob_expressions "${_root_path}/${suffix}/*")
 		endforeach()
 
-		if (CMAKE_VERSION LESS 3.12.0)
+		if (CMAKE_VERSION VERSION_LESS 3.12.0)
 			file(GLOB _path_list ${glob_expressions})
 		else()
 			file(GLOB _path_list CONFIGURE_DEPENDS ${glob_expressions})
