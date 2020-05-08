@@ -1090,14 +1090,21 @@ endfunction()
 
 # For CMake versions below 3.9.0, predict the objects path
 function(_arduino_get_objects target sources return_objects)
-	if (NOT CMAKE_VERSION LESS "3.9.0")
+	if (NOT CMAKE_VERSION VERSION_LESS "3.9.0")
 		set(_objects "$<TARGET_OBJECTS:${target}>")
 	else()
 		set(_objects)
 		# TODO Assumption
 		set(_obj_dir "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${target}.dir")
 		foreach(_source IN LISTS sources)
-			list(APPEND _objects "${_obj_dir}/${_source}.o")
+			if (NOT "${_source}" MATCHES "\\.[sS]$")
+				set(_obj_file "${_obj_dir}/${_source}.o")
+			else()
+				set(_obj_file "${_obj_dir}/${_source}.obj")
+			endif()
+			string(REGEX REPLACE "[ ]" "_" _obj_file "${_obj_file}")
+			# TODO SPACE to _ in _source, .S to .S.obj?
+			list(APPEND _objects "${_obj_file}")
 		endforeach()
 	endif()
 	set("${return_objects}" "${_objects}" PARENT_SCOPE)
