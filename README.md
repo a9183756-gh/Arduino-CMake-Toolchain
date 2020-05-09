@@ -83,7 +83,7 @@ target_link_arduino_libraries(my_app AUTO_PUBLIC)
 ```
 
 Note:
-1. *Wire* and *core* in the above examples are not CMake targets. They are just Arduino library names (case-sensitive).
+1. *Wire* and *core* in the above examples are not CMake targets. They are just Arduino library or include names (case-sensitive). Library and include names are the same in most libraries, but they may differ.
 1. It is required only to specify the direct dependencies. Any deeper dependencies are automatically identified and linked. For example, if *SD.h* is included, it is sufficient to link with *SD*, even if *SD* depends on other Arduino libraries, like *SPI*.
 
 These examples illustrates simple usage, but powerful enough for most use cases. However more advanced control and customization of Arduino libraries should be possible. Please refer to the [Examples](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/tree/master/Examples) folder, as well as the API documentation of `target_link_arduino_libraries` (Currently documented as comments in [BoardBuildTargets.cmake](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/blob/master/Arduino/System/BoardBuildTargets.cmake)).
@@ -99,7 +99,8 @@ target_enable_arduino_upload(my_executable) # This adds a target upload-my_execu
 ```
 
 Upload the executable (from the above example) to the board on COM3 serial port as follows
-**Note:** *There are changes in the commands since release 1.1. Now there is only a common upload target available for all applications, and application specific targets are deprecated.*
+
+**Note:** *There are changes in the commands since release 1.1. Now there is only a common upload target available for all applications, and application specific targets need to be explicitly enabled.*
 
 ```sh
 <make-command> upload TARGET=my_executable SERIAL_PORT=COM3
