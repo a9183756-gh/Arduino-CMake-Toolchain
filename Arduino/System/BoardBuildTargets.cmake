@@ -1103,7 +1103,6 @@ function(_arduino_get_objects target sources return_objects)
 				set(_obj_file "${_obj_dir}/${_source}.obj")
 			endif()
 			string(REGEX REPLACE "[ ]" "_" _obj_file "${_obj_file}")
-			# TODO SPACE to _ in _source, .S to .S.obj?
 			list(APPEND _objects "${_obj_file}")
 		endforeach()
 	endif()
