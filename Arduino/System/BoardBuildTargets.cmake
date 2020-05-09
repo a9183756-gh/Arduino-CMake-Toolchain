@@ -793,7 +793,7 @@ function(_add_internal_arduino_core target)
 	target_include_directories("${target}_cobjects_" PRIVATE
 		"${ARDUINO_BOARD_BUILD_CORE_PATH}"
 		"${ARDUINO_BOARD_BUILD_VARIANT_PATH}")
-	set(_cobjects_ "$<TARGET_OBJECTS:${target}_cobjects_>")
+	_arduino_get_objects("${target}_cobjects_" "${core_sources}" _cobjects_)
 
 	set(_vobjects_)
 	if (NOT "${variant_sources}" STREQUAL "")
@@ -803,7 +803,8 @@ function(_add_internal_arduino_core target)
 		target_include_directories("${target}_vobjects_" PRIVATE
 			"${ARDUINO_BOARD_BUILD_CORE_PATH}"
 			"${ARDUINO_BOARD_BUILD_VARIANT_PATH}")
-		set(_vobjects_ "$<TARGET_OBJECTS:${target}_vobjects_>")
+		_arduino_get_objects("${target}_vobjects_" "${variant_sources}"
+			_vobjects_)
 	endif()
 
 	add_library("${target}" 
@@ -1085,4 +1086,25 @@ function(_map_libs_to_lib_names libs_list_var)
 		endif()
 	endforeach()
 	set("${libs_list_var}" "${_lib_names_list}" PARENT_SCOPE)
+endfunction()
+
+# For CMake versions below 3.9.0, predict the objects path
+function(_arduino_get_objects target sources return_objects)
+	if (NOT CMAKE_VERSION VERSION_LESS "3.9.0")
+		set(_objects "$<TARGET_OBJECTS:${target}>")
+	else()
+		set(_objects)
+		# TODO Assumption
+		set(_obj_dir "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${target}.dir")
+		foreach(_source IN LISTS sources)
+			if (NOT "${_source}" MATCHES "\\.[sS]$")
+				set(_obj_file "${_obj_dir}/${_source}.o")
+			else()
+				set(_obj_file "${_obj_dir}/${_source}.obj")
+			endif()
+			string(REGEX REPLACE "[ ]" "_" _obj_file "${_obj_file}")
+			list(APPEND _objects "${_obj_file}")
+		endforeach()
+	endif()
+	set("${return_objects}" "${_objects}" PARENT_SCOPE)
 endfunction()
