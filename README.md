@@ -144,11 +144,11 @@ Resolution: Please try with release-1.1-dev branch.
 
 **3. Some libraries are not detected by *target_link_arduino_libraries***
 
-Currently, *target_link_arduino_libraries* takes only include names (i.e. the name of the header file without extension). If the include name does not match with the library name (as mentioned in *library.properties* of the library), the detection of the library fails.
+Currently, *target_link_arduino_libraries* takes only include names (i.e. the name of the header file without extension). If the include name does not match with the library name (as mentioned in *library.properties* of the library), the detection of the library fails \(Refer issue [#19](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/issues/19)\).
 
 Workaround: Rename the library folder to the include name and use include name in *target_link_arduino_libraries*.
 
-Resolution: Available, as mentioned in issue [#19](https://github.com/a9183756-gh/Arduino-CMake-Toolchain/issues/19), and will soon be merged into release-1.1-dev branch.
+Resolution: Please try with release-1.1-dev branch.
 
 ## How it works
 
