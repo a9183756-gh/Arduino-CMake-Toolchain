@@ -464,6 +464,7 @@ function(find_arduino_library lib return_lib_path)
 
 	# message("Search namespaces: ${ard_libs_ns_list}")
 
+	set(_lib_name)
 	if (DEFINED ARDUINO_LIB_${lib}_LIBNAME)
 		set(_lib_name "${ARDUINO_LIB_${lib}_LIBNAME}")
 	elseif(DEFINED ARDUINO_LIB_${lib}_PATH)
@@ -487,13 +488,15 @@ function(find_arduino_library lib return_lib_path)
 	endif()
 
 	# Error message if not found
-	if (NOT ARDUINO_LIB_${_lib_name}_PATH)
-		if (NOT parsed_args_QUIET)
-			message(SEND_ERROR "Arduino library ${lib} could not be found in "
-					"${search_paths}")
+	if (NOT _lib_name)
+		if (NOT ARDUINO_LIB_${_lib_name}_PATH)
+			if (NOT parsed_args_QUIET)
+				message(SEND_ERROR "Arduino library ${lib} could not be found in "
+						"${search_paths}")
+			endif()
+			set("${return_lib_path}" "${lib}-NOTFOUND" PARENT_SCOPE)
+			return()
 		endif()
-		set("${return_lib_path}" "${lib}-NOTFOUND" PARENT_SCOPE)
-		return()
 	endif()
 
 	# message("find_arduino_library(\"${lib}\":${ARDUINO_LIB_${lib}_PATH})")
