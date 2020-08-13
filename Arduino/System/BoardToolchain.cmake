@@ -182,7 +182,7 @@ function (SetupBoardToolchain boards_namespace board_id generate_dir)
 
 	# Set some extra properties
 	if (${CMAKE_HOST_UNIX})
-		execute_process(COMMAND "date" "+'%s'" OUTPUT_VARIABLE EPOCH)
+		execute_process(COMMAND "date" "+%s" OUTPUT_VARIABLE EPOCH)
 		properties_set_value("ard_global" "extra.time.local" "${EPOCH}")
 	endif()
 
