@@ -180,6 +180,12 @@ function (SetupBoardToolchain boards_namespace board_id generate_dir)
 	endif()
 	properties_set_value("ard_global" "runtime.os" "${ARDUINO_BOARD_HOST_NAME}")
 
+	# Set some extra properties
+	if (${CMAKE_HOST_UNIX})
+		execute_process(COMMAND "date" "+'%s'" OUTPUT_VARIABLE EPOCH)
+		properties_set_value("ard_global" "extra.time.local" "${EPOCH}")
+	endif()
+
 	# Packager of the selected board
 	_board_get_platform_property("/pkg_id" pkg_id)
 	_board_get_platform_property("/json_idx" json_idx)
