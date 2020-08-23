@@ -338,7 +338,6 @@ function (SetupBoardToolchain boards_namespace board_id generate_dir)
 		"^recipe\\.hooks\\.core\\.postbuild\\.[0-9]+\\.pattern$"
 		"^recipe\\.hooks\\.libraries\\.postbuild\\.[0-9]+\\.pattern$"
 		"^recipe\\.hooks\\.sketch\\.postbuild\\.[0-9]+\\.pattern$"
-		"^recipe\\.hooks\\.postbuild\\.[0-9]+\\.pattern$"
 		"^recipe\\.hooks\\.linking\\.prelink\\.[0-9]+\\.pattern$")
 	set(_link_pattern "^recipe\\.c\\.combine\\.pattern$")
 	set(_postbuild_pattern_list
@@ -346,7 +345,8 @@ function (SetupBoardToolchain boards_namespace board_id generate_dir)
 	set(_objcopy_pattern_list
 		"^recipe\\.hooks\\.objcopy\\.preobjcopy\\.[0-9]+\\.pattern$"
 		"^recipe\\.objcopy\\..*\\.pattern$"
-		"^recipe\\.hooks\\.objcopy\\.postobjcopy\\.[0-9]+\\.pattern$")
+		"^recipe\\.hooks\\.objcopy\\.postobjcopy\\.[0-9]+\\.pattern$"
+		"^recipe\\.hooks\\.postbuild\\.[0-9]+\\.pattern$")
 	#_board_find_gen_file_list("${_gen_file_list}" _gen_file_list
 	#	${_prelink_pattern_list} ${_link_pattern} ${_postbuild_pattern_list}
 	#	${_objcopy_pattern_list})
