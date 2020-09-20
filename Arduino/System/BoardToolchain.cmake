@@ -180,11 +180,14 @@ function (SetupBoardToolchain boards_namespace board_id generate_dir)
 	endif()
 	properties_set_value("ard_global" "runtime.os" "${ARDUINO_BOARD_HOST_NAME}")
 
-	# Set some extra properties
-	if (${CMAKE_HOST_UNIX})
-		execute_process(COMMAND "date" "+%s" OUTPUT_VARIABLE EPOCH)
-		properties_set_value("ard_global" "extra.time.local" "${EPOCH}")
-	endif()
+	# Set extra.time.* properties
+	string(TIMESTAMP epoch_local "%s")
+	properties_set_value("ard_global" "extra.time.local" "${epoch_local}")
+	string(TIMESTAMP epoch_utc "%s" UTC)
+	properties_set_value("ard_global" "extra.time.utc" "${epoch_utc}")
+	math(EXPR zone "${epoch_local} - ${epoch_utc}")
+	properties_set_value("ard_global" "extra.time.zone" "${zone}")
+	properties_set_value("ard_global" "extra.time.dst" "0") # Don't know how to get this
 
 	# Packager of the selected board
 	_board_get_platform_property("/pkg_id" pkg_id)
