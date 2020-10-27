@@ -179,13 +179,20 @@ function (target_link_arduino_libraries target_name)
 		endif()
 	endif()
 
+	# Include the LINK_LIBS and INTERFACE_LINK_LIBS in override list
+	_find_linked_arduino_libs("${target_name}" _override_list)
+	list(APPEND _list_OVERRIDE ${_override_list})
+	if (_list_OVERRIDE)
+		list(REMOVE_DUPLICATES _list_OVERRIDE)
+	endif()
+
 	# Link with the explicitly provided libraries (without
 	# PRIVATE/PUBLIC/INTERFACE keywords
 	if (_list_DEFAULT)
 		set(empty_list)
 		_map_libs_to_lib_names(_list_DEFAULT)
 		_link_ard_lib_list("${target_name}" _list_DEFAULT ""
-			empty_list empty_list)
+			_list_IGNORE _list_OVERRIDE)
 	endif()
 
 	# Link with the explicitly provided libraries (with
@@ -195,7 +202,7 @@ function (target_link_arduino_libraries target_name)
 			set(empty_list)
 			_map_libs_to_lib_names(_list_${_link_type})
 			_link_ard_lib_list("${target_name}" _list_${_link_type}
-				"${_link_type}" empty_list empty_list)
+				"${_link_type}" _list_IGNORE _list_OVERRIDE)
 		endif()
 	endforeach()
 
@@ -283,7 +290,7 @@ function(target_enable_arduino_upload target)
 	# application target. Currently we do it here, but may later be moved
 	# to target_link_arduino_libraries(core)
 	find_source_files("${ARDUINO_GENERATE_DIR}/sketch" app_sources RECURSE)
-	if (NOT "${app_sources}" EQUAL "")
+	if (NOT "${app_sources}" STREQUAL "")
 		target_sources("${target}" PRIVATE "${app_sources}")
 		target_link_arduino_libraries("${target}" AUTO_PRIVATE "${app_sources}")
 	endif()
@@ -533,6 +540,9 @@ endfunction()
 function(add_custom_arduino_library target lib)
 
 	_add_internal_arduino_library("${target}" "${lib}" ${ARGN})
+	target_get_arduino_lib("${target}" _ard_lib_name)
+	string(MAKE_C_IDENTIFIER "${_ard_lib_name}" _lib_id)
+	set("_custom_arduino_lib_${_lib_id}" "${target}" PARENT_SCOPE)
 
 endfunction()
 
@@ -560,6 +570,7 @@ endfunction()
 function(add_custom_arduino_core target)
 
 	_add_internal_arduino_core("${target}")
+	set("_custom_arduino_lib_core" "${target}" PARENT_SCOPE)
 
 endfunction()
 
@@ -680,6 +691,9 @@ function(_link_ard_lib_list target_name lib_list_var link_type
 		target_get_arduino_lib("${_lib}" _ard_lib_name)
 		if (_ard_lib_name)
 			set(_link_target "${_lib}")
+		elseif (NOT "${_custom_arduino_lib_${_lib_id}}" STREQUAL "")
+			# Having a custom library corresponding to this library
+			set(_link_target "${_custom_arduino_lib_${_lib_id}}")
 		elseif (TARGET "_arduino_lib_${_lib_id}")
 			# Already having the internal library
 			set(_link_target "_arduino_lib_${_lib_id}")
@@ -1079,7 +1093,7 @@ function(_map_libs_to_lib_names libs_list_var)
 		endif()
 		target_get_arduino_lib("${_lib}" _ard_lib_name)
 		if (_ard_lib_name)
-			list(APPEND _lib_names_list "${_lib}")
+			list(APPEND _lib_names_list "${_ard_lib_name}")
 		else()
 			find_arduino_library("${_lib}" _lib_path
 				LIBNAME_RESULT _lib_name ${ARGN})
