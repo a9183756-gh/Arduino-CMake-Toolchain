@@ -448,21 +448,52 @@ endfunction()
 function(_board_mgr_download url _file_path)
 
 	cmake_parse_arguments(parsed_args "QUIET;REQUIRED"
-		"RESULT_VARIABLE" "" ${ARGN})
+		"RESULT_VARIABLE;EXPECTED_HASH" "" ${ARGN})
 
 	if (CMAKE_VERBOSE_MAKEFILE)
 		message(STATUS "Downloading ${url}...")
 	endif()
 
-	file(DOWNLOAD "${url}" "${_file_path}" STATUS _status
-		${parsed_args_UNPARSED_ARGUMENTS})
-	list(GET _status 0 _result)
-	list(GET _status 1 _result_str)
+	set(_result 1)
+	if (parsed_args_EXPECTED_HASH)
+		string(REPLACE "=" ";" _hash_args  "${parsed_args_EXPECTED_HASH}")
+		list(GET _hash_args 0 _hash_type)
+		list(GET _hash_args 1 _hash_value)
+		# Check hash before download
+		if (EXISTS "${_file_path}")
+			_board_mgr_check_file_hash("${_hash_type}" "${_hash_value}"
+				"${_file_path}" _result QUIET)
+		endif()
+	endif()
+
+	if (NOT _result EQUAL 0)
+		file(DOWNLOAD "${url}" "${_file_path}" STATUS _status INACTIVITY_TIMEOUT 5
+			${parsed_args_UNPARSED_ARGUMENTS})
+		if (CMAKE_VERBOSE_MAKEFILE)
+			message("${_file_path} download status:${_status}")
+		endif()
+		list(GET _status 0 _result)
+		list(GET _status 1 _result_str)
+	else()
+		if (CMAKE_VERBOSE_MAKEFILE)
+			message(STATUS "${_file_path} with correct hash exists already!")
+		endif()
+		set(_result 0)
+	endif()
+
+	# Check hash after download
+	if (_result EQUAL 0 AND parsed_args_EXPECTED_HASH)
+		_board_mgr_check_file_hash("${_hash_type}" "${_hash_value}"
+			"${_file_path}" _result)
+		set(_result_str "Download HASH mismatch")
+	endif()
+
 	if (DEFINED parsed_args_RESULT_VARIABLE)
 		set(${parsed_args_RESULT_VARIABLE} ${_result} PARENT_SCOPE)
 	endif()
 
 	if (NOT _result EQUAL 0)
+		file(REMOVE "${_file_path}")
 		if (parsed_args_REQUIRED)
 			error_exit("${_result_str}\n"
 				"Downloading ${url} failed!!!")
@@ -558,6 +589,35 @@ macro(_board_mgr_get_pl_tools_list)
 	endif()
 
 endmacro()
+
+# Check hash, returns 0
+function(_board_mgr_check_file_hash hash_type expected_hash file_path result_var)
+
+	cmake_parse_arguments(parsed_args "QUIET;REQUIRED"
+		"" "" ${ARGN})
+
+	string(TOLOWER "${expected_hash}" expected_hash)
+	file("${hash_type}" "${file_path}" _actual_hash)
+	string(TOLOWER "${_actual_hash}" _actual_hash)
+	if (NOT "${_actual_hash}" STREQUAL "${expected_hash}")
+		set("${result_var}" 1 PARENT_SCOPE)
+		if(NOT parsed_args_QUIET)
+			execute_process(COMMAND ${CMAKE_COMMAND} -E echo
+				"HASH mismatch for ${file_path}\n"
+				"	expected: [${expected_hash}]\n"
+				"	actual:   [${_actual_hash}]")
+		endif()
+
+		if (parsed_args_REQUIRED)
+			message(SEND_ERROR "Hash match failed!!!")
+		elseif(NOT parsed_args_QUIET)
+			message(WARNING "Hash match failed!!!")
+		endif()
+		return()
+	endif()
+
+	set("${result_var}" 0 PARENT_SCOPE)
+endfunction()
 
 #libraries
 
