@@ -19,7 +19,8 @@ function(InitializeArduinoPackagePathList)
 
 	if (${CMAKE_HOST_APPLE})
 
-		set(install_search_paths "$ENV{HOME}/Applications" /Applications
+		set(install_search_paths "$ENV{HOME}/Applications"
+			"$ENV{HOME}/Library/Arduino15" /Applications
 			/Developer/Applications /sw /opt/local)
 		set(install_path_suffixes Arduino.app/Contents/Java
 			Arduino.app/Contents/Resources/Java)
@@ -57,6 +58,8 @@ function(InitializeArduinoPackagePathList)
 						DIRECTORY)
 					list(APPEND install_search_paths "${_install_path}")
 				endif()
+			elseif(EXISTS "$ENV{HOME}/.arduino15/inventory.yaml")
+				list(APPEND install_search_paths "$ENV{HOME}/.arduino15")
 			endif()
 		endif()
 
@@ -76,7 +79,8 @@ function(InitializeArduinoPackagePathList)
 
 		set(Prog86Path "ProgramFiles(x86)")
 		set(install_search_paths "$ENV{${Prog86Path}}/Arduino"
-			"$ENV{ProgramFiles}/Arduino")
+			"$ENV{ProgramFiles}/Arduino"
+			"$ENV{LOCALAPPDATA}/Arduino15")
 		set(install_path_suffixes "")
 
 		file(GLOB package_search_paths "$ENV{LOCALAPPDATA}/Arduino15")
@@ -97,7 +101,7 @@ function(InitializeArduinoPackagePathList)
 
 	# Search for Arduino install path
 	find_path(ARDUINO_INSTALL_PATH
-			NAMES lib/version.txt
+			NAMES lib/version.txt inventory.yaml
 			PATH_SUFFIXES ${install_path_suffixes}
 			HINTS ${install_search_paths}
 			NO_DEFAULT_PATH
@@ -110,13 +114,18 @@ function(InitializeArduinoPackagePathList)
 			"Use -DARDUINO_INSTALL_PATH=<path> to manually specify the path (OR)\n"
 			"Use -DARDUINO_BOARD_MANAGER_URL=<board_url> to try downloading\n")
 	elseif(ARDUINO_INSTALL_PATH AND NOT "${ARDUINO_ENABLE_PACKAGE_MANAGER}"
-        AND "${ARDUINO_BOARD_MANAGER_URL}" STREQUAL "")
-		message("${ARDUINO_INSTALL_PATH}")
-		file(READ "${ARDUINO_INSTALL_PATH}/lib/version.txt" _version)
-		string(REGEX MATCH "[0-9]+\\.[0-9]" _ard_version "${_version}")
-		if (_version AND "${_ard_version}" VERSION_LESS "1.5")
-			message(WARNING "${ARDUINO_INSTALL_PATH} may be unsupported version "
-				"${_version}. Please install newer version!")
+		AND "${ARDUINO_BOARD_MANAGER_URL}" STREQUAL "")
+		if (EXISTS "${ARDUINO_INSTALL_PATH}/lib/version.txt")
+			message("${ARDUINO_INSTALL_PATH}")
+			file(READ "${ARDUINO_INSTALL_PATH}/lib/version.txt" _version)
+			string(REGEX MATCH "[0-9]+\\.[0-9]" _ard_version "${_version}")
+			message("${_ard_version}")
+			if (_version AND "${_ard_version}" VERSION_LESS "1.5")
+				message(WARNING "${ARDUINO_INSTALL_PATH} may be unsupported version "
+					"${_version}. Please install newer version!")
+			endif()
+		elseif(EXISTS "${ARDUINO_INSTALL_PATH}/inventory.yaml")
+			message("arduino-cli found at ${ARDUINO_INSTALL_PATH}")
 		endif()
 	endif()
 
