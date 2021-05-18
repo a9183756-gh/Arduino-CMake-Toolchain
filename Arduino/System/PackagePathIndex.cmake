@@ -162,6 +162,18 @@ function(InitializeArduinoPackagePathList)
 	endif()
 	# message("ARDUINO_SKETCHBOOK_PATH:${ARDUINO_SKETCHBOOK_PATH}")
 
+	# support arduino-cli package downloads on Windows. Sketchbook path will be
+	# not found if IDE is not installed, so use the Documents/Arduino as
+	# additional library lookup paths. This is the expected location when running
+	# arduino-cli lib install <library>.
+	if (NOT ARDUINO_SKETCHBOOK_PATH AND _reg_documents)
+		file(GLOB _reg_doc_lib "${_reg_documents}/Arduino")
+		if (_reg_doc_lib)
+			set(ARDUINO_SKETCHBOOK_PATH "${_reg_doc_lib}"
+				CACHE PATH "Path to Arduino Libraries")
+		endif()
+	endif()
+
 	# Arduino local package management path
 	if (NOT ARDUINO_PACKAGE_MANAGER_PATH)
 		set(ARDUINO_PACKAGE_MANAGER_PATH
