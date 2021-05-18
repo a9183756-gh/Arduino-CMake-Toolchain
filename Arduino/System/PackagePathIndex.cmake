@@ -86,11 +86,14 @@ function(InitializeArduinoPackagePathList)
 		file(GLOB package_search_paths "$ENV{LOCALAPPDATA}/Arduino15")
 		set(package_path_suffixes "")
 
-		set(_reg_software "HKEY_LOCAL_MACHINE\\SOFTWARE")
+		set(_reg_software "HKEY_CURRENT_USER\\SOFTWARE")
 		set(_reg_win "${_reg_software}\\Microsoft\\Windows\\CurrentVersion")
 		set(_reg_explorer "${_reg_win}\\Explorer")
+		get_filename_component(_reg_documents
+			"[${_reg_explorer}\\User Shell Folders;Personal]" ABSOLUTE)
+
 		file(GLOB sketchbook_search_paths "$ENV{LOCALAPPDATA}/Arduino15"
-			"[${_reg_explorer}\\User Shell Folders;Personal]/ArduinoData")
+			"${_reg_documents}/ArduinoData")
 		set(sketchbook_path_suffixes "")
 	else()
 
