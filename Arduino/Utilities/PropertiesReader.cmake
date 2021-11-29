@@ -200,43 +200,49 @@ function(_properties_expand_value value return_value namespace)
 		return()
 	endif ()
 
-	# Get the variables list
-	string(REGEX MATCHALL "{[^{}/]+}" _var_list "${_value}")
-	if (NOT "${_var_list}" STREQUAL "")
-		list(REMOVE_DUPLICATES _var_list)
-	endif()
-	foreach(_var_str IN LISTS _var_list)
+	# Set previous value to nothing so that there is at least one iteration
+	set(_previous_value "")
+	while(NOT "${_previous_value}" STREQUAL "${_value}")
+		set(_previous_value "${_value}")
 
-		# Get the variable name
-		string(REGEX MATCH "^{(.*)}$" _match "${_var_str}")
-		set(_var_name "${CMAKE_MATCH_1}")
+		# Get the variables list
+		string(REGEX MATCHALL "{[^{}/]+}" _var_list "${_value}")
+		if (NOT "${_var_list}" STREQUAL "")
+			list(REMOVE_DUPLICATES _var_list)
+		endif()
+		foreach(_var_str IN LISTS _var_list)
 
-		# Check if not resolved already
-		if (NOT DEFINED "/prop_int_resolved.${_var_name}")
-			# If such a variable is not in the namespace, no need to resolve
-			if (NOT DEFINED "${namespace}.${_var_name}")
-				properties_set_value("/prop_int_unresolved" ${_var_name} "")
-				continue()
+			# Get the variable name
+			string(REGEX MATCH "^{(.*)}$" _match "${_var_str}")
+			set(_var_name "${CMAKE_MATCH_1}")
+
+			# Check if not resolved already
+			if (NOT DEFINED "/prop_int_resolved.${_var_name}")
+				# If such a variable is not in the namespace, no need to resolve
+				if (NOT DEFINED "${namespace}.${_var_name}")
+					properties_set_value("/prop_int_unresolved" ${_var_name} "")
+					continue()
+				endif()
+
+				# Temporarily resolve it to the same variable to handle recursive
+				# references
+				properties_set_value("/prop_int_resolved" "${_var_name}"
+					"{${_var_name}}")
+
+				# message("=> Resolve *** ${_var_name} *** : "
+				#	"${${namespace}.${_var_name}}")
+				_properties_expand_value("${${namespace}.${_var_name}}"
+					_var_value "${namespace}")
+				properties_set_value("/prop_int_resolved" "${_var_name}"
+					"${_var_value}")
+				# message("=> EXPANDED ${_var_name}: ${_var_value}")
 			endif()
 
-			# Temporarily resolve it to the same variable to handle recursive
-			# references
-			properties_set_value("/prop_int_resolved" "${_var_name}"
-				"{${_var_name}}")
+			string(REPLACE "${_var_str}" "${/prop_int_resolved.${_var_name}}"
+				_value "${_value}")
 
-			# message("=> Resolve *** ${_var_name} *** : "
-			#	"${${namespace}.${_var_name}}")
-			_properties_expand_value("${${namespace}.${_var_name}}"
-				_var_value "${namespace}")
-			properties_set_value("/prop_int_resolved" "${_var_name}"
-				"${_var_value}")
-			# message("=> EXPANDED ${_var_name}: ${_var_value}")
-		endif()
-
-		string(REPLACE "${_var_str}" "${/prop_int_resolved.${_var_name}}"
-			_value "${_value}")
-
-	endforeach()
+		endforeach()
+	endwhile()
 
 	properties_set_parent_scope("/prop_int_resolved")
 	properties_set_parent_scope("/prop_int_unresolved")

@@ -218,6 +218,7 @@ function(SetupBoardTests)
 		set_tests_properties("${distinct_id}" PROPERTIES
 			FIXTURES_REQUIRED "PlTestResults"
 			SKIP_RETURN_CODE 100
+			TIMEOUT 3600
 		)
 
 		if ("${shell_cmd}" STREQUAL "" AND
@@ -354,6 +355,7 @@ function(SetupPlatformTests pl_url ref_url_list return_pl_tests)
 		set_tests_properties("${test_id}" PROPERTIES
 			FIXTURES_REQUIRED "TestResults"
 			SKIP_RETURN_CODE 100
+			TIMEOUT 3600
 		)
 		if ("${shell_cmd}" STREQUAL "" AND
 			NOT CMAKE_VERSION VERSION_LESS "3.16.0")
