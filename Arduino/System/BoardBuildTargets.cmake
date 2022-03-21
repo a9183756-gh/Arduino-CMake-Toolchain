@@ -945,3 +945,13 @@ function(_get_def_env_options str return_defs)
 	set("${return_defs}" "${_defs}" PARENT_SCOPE)
 
 endfunction()
+
+function (target_link_esp32_sdk target_name)
+	file(GLOB_RECURSE SDKFILES
+			"${ARDUINO_PACKAGE_PATH}/packages/esp32/hardware/esp32/1.0.6/tools/sdk/include/*.h"
+			"${ARDUINO_PACKAGE_PATH}/packages/esp32/hardware/esp32/1.0.6/tools/sdk/include/*.cpp")
+
+	target_sources("${target_name}" PUBLIC ${SDKFILES})
+
+	target_include_directories(esp32nuki PUBLIC "${ARDUINO_PACKAGE_PATH}/packages/esp32/hardware/esp32/1.0.6/tools/sdk/include/esp32")
+endfunction()
