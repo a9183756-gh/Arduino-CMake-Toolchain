@@ -953,5 +953,5 @@ function (target_link_esp32_sdk target_name)
 
 	target_sources("${target_name}" PUBLIC ${SDKFILES})
 
-	target_include_directories(esp32nuki PUBLIC "${ARDUINO_PACKAGE_PATH}/packages/esp32/hardware/esp32/1.0.6/tools/sdk/include/esp32")
+	target_include_directories("${target_name}" PUBLIC "${ARDUINO_PACKAGE_PATH}/packages/esp32/hardware/esp32/1.0.6/tools/sdk/include/esp32")
 endfunction()
