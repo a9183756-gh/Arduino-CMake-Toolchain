@@ -52,6 +52,9 @@ function (SetupBoardToolchain boards_namespace board_id generate_dir)
 	string(TOUPPER "${pl_arch}" ARDUINO_BOARD_BUILD_ARCH)
 	_board_get_platform_property("/pl_path" ARDUINO_BOARD_RUNTIME_PLATFORM_PATH)
 
+	# Get board RAM size
+	_board_get_property("upload.maximum_data_size" board_ram_size)
+
 	# Inherit the platform.txt from the referenced platform. This gets
 	# overriden later, if the platform provides its own platform.txt.
 	_board_get_property("build.core" _prop_value  QUIET)
@@ -530,6 +533,7 @@ function (SetupBoardToolchain boards_namespace board_id generate_dir)
 	set(ARDUINO_BOARD_IDENTIFIER "${_short_id}")
 	set(ARDUINO_BOARD_NAME "${board_name}")
 	set(ARDUINO_GENERATE_DIR "${generate_dir}")
+	set(ARDUINO_BOARD_RAM_SIZE "${board_ram_size}")
 
 	set(templates_dir "${ARDUINO_TOOLCHAIN_DIR}/Arduino/Templates")
 	configure_file(
