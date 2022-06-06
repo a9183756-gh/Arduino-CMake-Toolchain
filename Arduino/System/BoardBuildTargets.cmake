@@ -861,8 +861,8 @@ function(_library_search_process lib search_paths_var search_suffixes_var return
 			# message("Folder match ${lib}:${dir}:${folder_name_priority}")
 
 			# Check for architecture match
-			file(STRINGS "${dir}/library.properties" arch_str REGEX "architectures=.*")
-			string(REGEX MATCH "architectures=(.*)" arch_list "${arch_str}")
+			file(STRINGS "${dir}/library.properties" arch_str REGEX "^architectures=.*")
+			string(REGEX MATCH "^architectures=(.*)" arch_list "${arch_str}")
 			string(REPLACE "," ";" arch_list "${CMAKE_MATCH_1}")
 			string(TOUPPER "${ARDUINO_BOARD_BUILD_ARCH}" board_arch)
 
