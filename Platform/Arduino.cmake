@@ -5,9 +5,9 @@ set(CMAKE_INCLUDE_FLAG_ASM "-I")
 set(CMAKE_EXECUTABLE_SUFFIX ".elf")
 
 # If we do not set to .o, some linker scripts aren't working correctly
-set(CMAKE_C_OUTPUT_EXTENSION ".o")
-set(CMAKE_CXX_OUTPUT_EXTENSION ".o")
-set(CMAKE_ASM_OUTPUT_EXTENSION ".o")
+#set(CMAKE_C_OUTPUT_EXTENSION ".o")
+#set(CMAKE_CXX_OUTPUT_EXTENSION ".o")
+#set(CMAKE_ASM_OUTPUT_EXTENSION ".o")
 
 # Where is the target environment
 # Add all tools paths and include paths?, tools/sdk in platform path?

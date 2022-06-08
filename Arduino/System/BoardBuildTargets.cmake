@@ -696,6 +696,7 @@ function(_link_ard_lib_list target_name lib_list_var link_type
 
 	# Finally link the target with all the libraries
 	# message("target_link_libraries(\"${target_name}\" ${link_type} ${_link_targets})")
+	message(STATUS "_link_targets ${_link_targets}")
 	if (_link_targets)
 		target_link_libraries("${target_name}" ${link_type}
 			${_link_targets})
@@ -736,6 +737,7 @@ function(_add_internal_arduino_library target lib)
 		set(lib_sources "${CMAKE_CURRENT_BINARY_DIR}/${target}_dummy.cpp")
 	endif()
 
+	message(STATUS "lib target ${target}" )
 	add_library("${target}" STATIC ${lib_headers} ${lib_sources})
 	# message("\"${include_dirs}\"")
 	target_include_directories(${target} PUBLIC ${include_dirs})
@@ -769,6 +771,7 @@ function(_add_internal_arduino_core target)
 	# get_headers_parent_directories("${core_headers};${variant_headers}" include_dirs)
 
 	# Add the library and set the include directories
+	message(STATUS "core lib target ${target} ${core_sources}")
 	add_library("${target}" STATIC ${core_headers} ${core_sources}
 		${variant_headers} ${variant_sources})
 	# target_include_directories(${target} PUBLIC ${include_dirs})
