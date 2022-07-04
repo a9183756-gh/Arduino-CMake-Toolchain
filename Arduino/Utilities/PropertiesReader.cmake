@@ -180,8 +180,8 @@ macro(_properties_parse content namespace)
 
 endmacro()
 
-function(_properties_expand_value value return_value namespace
-		expanded_prop_list)
+# Utility function to expand the embedded variables
+function(_properties_expand_value value return_value namespace)
 
 	set(_value "${value}")
 
@@ -191,47 +191,52 @@ function(_properties_expand_value value return_value namespace
 		return()
 	endif ()
 
-	set(_result_value "")
-	while(TRUE)
-		string(FIND "${_value}" "{" var_start_pos)
-		string(SUBSTRING "${_value}" 0 ${var_start_pos} val_prefix)
-		string_append(_result_value "${val_prefix}")
-		if (var_start_pos EQUAL -1)
-			break()
-		ENDIF()
-		math(EXPR var_start_pos  "${var_start_pos} + 1")
-		string(SUBSTRING "${_value}" ${var_start_pos} -1 val_suffix)
-		string(FIND "${val_suffix}" "}" var_end_pos)
-		if (var_end_pos EQUAL -1)
-			string_append(_result_value "{${val_suffix}")
-			break()
-		ENDIF()
-		string(SUBSTRING "${val_suffix}" 0 ${var_end_pos} var_name)
-		if (DEFINED "${namespace}.${var_name}")
-			list(FIND "${expanded_prop_list}" "${var_name}" _found_idx)
-			if ("${_found_idx}" EQUAL -1)
-				list(APPEND "${expanded_prop_list}" "${var_name}")
-				# message("=> Resolve *** ${var_name} *** : ${${namespace}.${var_name}}")
-				_properties_expand_value("${${namespace}.${var_name}}"
-					_var_value "${namespace}" "${expanded_prop_list}")
-				set("${namespace}.${var_name}" "${_var_value}")
-				# message("=> EXPANDED ${var_name}: ${_var_value}")
-				string_append(_result_value "${_var_value}")
-			else()
-				string_append(_result_value "${${namespace}.${var_name}}")
-			endif()
-		else()
-			string_append(_result_value "{${var_name}}")
+	# Set previous value to nothing so that there is at least one iteration
+	set(_previous_value "")
+	while(NOT "${_previous_value}" STREQUAL "${_value}")
+		set(_previous_value "${_value}")
+
+		# Get the variables list
+		string(REGEX MATCHALL "{[^{}/]+}" _var_list "${_value}")
+		if (NOT "${_var_list}" STREQUAL "")
+			list(REMOVE_DUPLICATES _var_list)
 		endif()
-		math(EXPR var_end_pos  "${var_end_pos} + 1")
-		string(SUBSTRING "${val_suffix}" ${var_end_pos} -1 _value)
+		foreach(_var_str IN LISTS _var_list)
+
+			# Get the variable name
+			string(REGEX MATCH "^{(.*)}$" _match "${_var_str}")
+			set(_var_name "${CMAKE_MATCH_1}")
+
+			# Check if not resolved already
+			if (NOT DEFINED "/prop_int_resolved.${_var_name}")
+				# If such a variable is not in the namespace, no need to resolve
+				if (NOT DEFINED "${namespace}.${_var_name}")
+					properties_set_value("/prop_int_unresolved" ${_var_name} "")
+					continue()
+				endif()
+
+				# Temporarily resolve it to the same variable to handle recursive
+				# references
+				properties_set_value("/prop_int_resolved" "${_var_name}"
+						"{${_var_name}}")
+
+				# message("=> Resolve *** ${_var_name} *** : "
+				#	"${${namespace}.${_var_name}}")
+				_properties_expand_value("${${namespace}.${_var_name}}"
+						_var_value "${namespace}")
+				properties_set_value("/prop_int_resolved" "${_var_name}"
+						"${_var_value}")
+				# message("=> EXPANDED ${_var_name}: ${_var_value}")
+			endif()
+
+			string(REPLACE "${_var_str}" "${/prop_int_resolved.${_var_name}}"
+					_value "${_value}")
+
+		endforeach()
 	endwhile()
 
-	set("${expanded_prop_list}" "${${expanded_prop_list}}" PARENT_SCOPE)
-	foreach(_prop IN LISTS ${expanded_prop_list})
-		set("${namespace}.${_prop}" "${${namespace}.${_prop}}" PARENT_SCOPE)
-	endforeach()
-	set("${return_value}" "${_result_value}" PARENT_SCOPE)
+	properties_set_parent_scope("/prop_int_resolved")
+	properties_set_parent_scope("/prop_int_unresolved")
+	set("${return_value}" "${_value}" PARENT_SCOPE)
 
 endfunction()
-
