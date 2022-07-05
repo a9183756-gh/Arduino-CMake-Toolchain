@@ -9,7 +9,7 @@ This is a fork of
 https://github.com/a9183756-gh/Arduino-CMake-Toolchain
 
 The original projects seems to be not maintained anymore. As far as I have tested, it
-only works with the Arduino ESP32 core up to version 1.6. I've merged a full open
+only works with the Arduino ESP32 core up to version 1.6. I've merged a few open
 pull requests from the original project to get compatibility with Core 2.0.3
 (latest at the time of writing).<br>
 The included fixes are:
