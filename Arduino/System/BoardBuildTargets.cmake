@@ -952,13 +952,3 @@ function(_get_def_env_options str return_defs)
 	set("${return_defs}" "${_defs}" PARENT_SCOPE)
 
 endfunction()
-
-function (target_link_esp32_sdk target_name)
-	file(GLOB_RECURSE SDKFILES
-			"${ARDUINO_BOARD_RUNTIME_PLATFORM_PATH}/tools/sdk/include/*.h"
-			"${ARDUINO_BOARD_RUNTIME_PLATFORM_PATH}/tools/sdk/include/*.cpp")
-
-	target_sources("${target_name}" PUBLIC ${SDKFILES})
-
-	target_include_directories("${target_name}" PUBLIC "${ARDUINO_BOARD_RUNTIME_PLATFORM_PATH}/tools/sdk/include/esp32")
-endfunction()
