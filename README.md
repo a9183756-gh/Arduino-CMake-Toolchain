@@ -2,6 +2,22 @@
 
 **Arduino CMake toolchain** is a CMake toolchain for cross-compiling CMake based projects for all Arduino compatible boards (AVR, ESP32 etc.). Of course, this means all the benefits of CMake for Arduino compilation, like using your favourite IDE, configuration checks (e.g. `try_compile`, `CheckTypeSize`), etc. This also brings the Arduino compilation to professional users, who are limited by the Arduino IDE compilation.
 
+## Note by technyon
+
+This is a fork of 
+
+https://github.com/a9183756-gh/Arduino-CMake-Toolchain
+
+The original projects seems to be not maintained anymore. As far as I have tested, it
+only works with the Arduino ESP32 core up to version 1.6. I've merged a full open
+pull requests from the original project to get compatibility with Core 2.0.3
+(latest at the time of writing).<br>
+The included fixes are:
+
+- https://github.com/a9183756-gh/Arduino-CMake-Toolchain/pull/53
+- https://github.com/a9183756-gh/Arduino-CMake-Toolchain/pull/57
+- Generate build_opts.h file in cmake binary dear to pass cpp compiler check 
+
 ## Project Roots
 
 [Arduino-CMake-NG](https://github.com/arduino-cmake/Arduino-CMake-NG) is a great project, which could have prevented me from writing yet another Arduino CMake toolchain. However, as claimed by the project, Arduino-CMake-NG could not be easily utilized/modified for other Arduino compatible boards other than AVR, like ESP32, due to the fact that it does not fully work the way Arduino IDE works and has lot of AVR specific stuff. An other important limitation is related to portability. Arduino-CMake-NG provides Arduino specific CMake interface, requiring CMake scripts to be written/modified specifically for Arduino, rather than just passing `-D CMAKE_TOOLCHAIN_FILE=/path/to/Arduino-toolchain.cmake` to a generic CMake project.
