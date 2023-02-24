@@ -696,6 +696,7 @@ function(_link_ard_lib_list target_name lib_list_var link_type
 
 	# Finally link the target with all the libraries
 	# message("target_link_libraries(\"${target_name}\" ${link_type} ${_link_targets})")
+	message(STATUS "_link_targets ${_link_targets}")
 	if (_link_targets)
 		target_link_libraries("${target_name}" ${link_type}
 			${_link_targets})
@@ -736,6 +737,7 @@ function(_add_internal_arduino_library target lib)
 		set(lib_sources "${CMAKE_CURRENT_BINARY_DIR}/${target}_dummy.cpp")
 	endif()
 
+	message(STATUS "lib target ${target}" )
 	add_library("${target}" STATIC ${lib_headers} ${lib_sources})
 	# message("\"${include_dirs}\"")
 	target_include_directories(${target} PUBLIC ${include_dirs})
@@ -769,6 +771,7 @@ function(_add_internal_arduino_core target)
 	# get_headers_parent_directories("${core_headers};${variant_headers}" include_dirs)
 
 	# Add the library and set the include directories
+	message(STATUS "core lib target ${target} ${core_sources}")
 	add_library("${target}" STATIC ${core_headers} ${core_sources}
 		${variant_headers} ${variant_sources})
 	# target_include_directories(${target} PUBLIC ${include_dirs})
@@ -861,8 +864,8 @@ function(_library_search_process lib search_paths_var search_suffixes_var return
 			# message("Folder match ${lib}:${dir}:${folder_name_priority}")
 
 			# Check for architecture match
-			file(STRINGS "${dir}/library.properties" arch_str REGEX "architectures=.*")
-			string(REGEX MATCH "architectures=(.*)" arch_list "${arch_str}")
+			file(STRINGS "${dir}/library.properties" arch_str REGEX "^architectures=.*")
+			string(REGEX MATCH "^architectures=(.*)" arch_list "${arch_str}")
 			string(REPLACE "," ";" arch_list "${CMAKE_MATCH_1}")
 			string(TOUPPER "${ARDUINO_BOARD_BUILD_ARCH}" board_arch)
 
@@ -916,11 +919,18 @@ function(_library_search_process lib search_paths_var search_suffixes_var return
 	endif()
 
 	# Although we got the match, let us search for the required header within the folder
-	file(GLOB_RECURSE lib_header_path "${matched_lib_path}/${lib}.h*")
-	if (NOT lib_header_path)
-		set ("${return_var}" "${lib}-NOTFOUND" PARENT_SCOPE)
-		return()
-	endif()
+	file(STRINGS "${matched_lib_path}/library.properties" incl_list REGEX "^includes=.*")
+	string(REGEX MATCH "^includes=(.*)" incl_list "${arch_str}")
+	string(REPLACE "," ";" incl_list "${CMAKE_MATCH_1}")
+
+	foreach(h ${incl_list})
+		file(GLOB_RECURSE lib_header_path "${matched_lib_path}/${h}.h*")
+		if (NOT lib_header_path)
+			message(STATUS "Header ${h} for ${lib} is not found.")
+			set ("${return_var}" "${lib}-NOTFOUND" PARENT_SCOPE)
+			return()
+		endif()
+	endforeach()
 
 	set ("${return_var}" "${matched_lib_path}" PARENT_SCOPE)
 

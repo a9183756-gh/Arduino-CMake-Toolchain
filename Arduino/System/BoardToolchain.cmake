@@ -16,6 +16,29 @@ include(Arduino/Utilities/PropertiesReader)
 include(Arduino/System/PackagePathIndex)
 include(Arduino/System/PlatformIndex)
 include(Arduino/System/BoardsIndex)
+include(Arduino/System/GCCOptionsParser)
+
+function(filterTemplatedBullshit)
+endfunction()
+
+function(extractTargetFlagsFromGCCCLI prefix argsString)
+	parseGCCOptions(parsed "${argsString}")
+
+	set(rest_new "")
+	foreach(a ${parsed_rest})
+		if(a MATCHES "^({.+}|-o|.*{[a-zA-Z0-9\\.]+}.*)$")
+		else()
+			list(APPEND rest_new "${a}")
+		endif()
+	endforeach()
+
+	set(flags ${parsed_target} ${rest_new} ${parsed_features})
+	string(JOIN " " flags ${flags})
+
+	set("${prefix}_flags" "${flags}" PARENT_SCOPE)
+	set("${prefix}_defines" "${parsed_defines}" PARENT_SCOPE)
+endfunction()
+
 
 #==============================================================================
 # Setup the toolchain for the Arduino board set in the variable ARDUINO_BOARD.
@@ -372,54 +395,297 @@ function (SetupBoardToolchain)
 		)
 	endforeach()
 
-	# CMAKE_C_COMPILER
-	# message("ARDUINO_RULE_recipe.c.o.pattern:${ARDUINO_RULE_recipe.c.o.pattern}")
-	_resolve_build_rule_properties("recipe.c.o.pattern" _build_cmd
-		_build_string)
-	set(CMAKE_C_COMPILER "${_build_cmd}")
-	set(CMAKE_C_COMPILE_OBJECT "<CMAKE_C_COMPILER> ${_build_string}")
-	string_escape_quoting(CMAKE_C_COMPILER)
-	string_escape_quoting(CMAKE_C_COMPILE_OBJECT)
+	# BOARD_CPU
+	# ard_pkg.1.packages.1.platforms.1.architecture
+	set(CMAKE_SYSTEM_PROCESSOR "avr")
+	set(CMAKE_SYSTEM_PROCESSOR "${CMAKE_SYSTEM_PROCESSOR}" PARENT_SCOPE)
 
-	# CMAKE_CXX_COMPILER
-	_resolve_build_rule_properties("recipe.cpp.o.pattern" _build_cmd
-		_build_string)
-	set(CMAKE_CXX_COMPILER "${_build_cmd}")
-	set(CMAKE_CXX_COMPILE_OBJECT "<CMAKE_CXX_COMPILER> ${_build_string}")
-	string_escape_quoting(CMAKE_CXX_COMPILER)
-	string_escape_quoting(CMAKE_CXX_COMPILE_OBJECT)
+	_board_get_property("build.mcu" ARDUINO_BOARD_MCU)
 
-	# CMAKE_ASM_COMPILER
-	_resolve_build_rule_properties("recipe.S.o.pattern" _build_cmd
-		_build_string)
-	if (_build_cmd) # ASM pattern may not be there?
-		set(CMAKE_ASM_COMPILER "${_build_cmd}")
-		set(CMAKE_ASM_COMPILE_OBJECT "<CMAKE_ASM_COMPILER> ${_build_string}")
-		string_escape_quoting(CMAKE_ASM_COMPILER)
-		string_escape_quoting(CMAKE_ASM_COMPILE_OBJECT)
+	if(USE_CLANG_AS_COMPILER OR REST_OF_TOOLCHAIN_IS_LLVM)
+		#set(CMAKE_SYSTEM_PROCESSOR "${ARDUINO_BOARD_BUILD_ARCH}")
+		message(STATUS "ARDUINO_BOARD_IDENTIFIER ${ARDUINO_BOARD_IDENTIFIER}")
+		message(STATUS "CMAKE_SYSTEM_PROCESSOR ${CMAKE_SYSTEM_PROCESSOR}")
+
+		############
+		set(double "${CMAKE_SYSTEM_PROCESSOR}")
+		set(triple "${double}")
+		set("CLANG_TARGET_TRIPLE" "${triple}")
+		set(CMAKE_SYSROOT "${AVR_GCC_ROOT}")
+		set(CMAKE_FIND_ROOT_PATH "${CMAKE_SYSROOT}")
+
+		if(GCC_PREFIX_DOUBLE_USE)
+			set(GCC_TOOLS_DOUBLE_PREFIX "${double}-")
+		else()
+			set(GCC_TOOLS_DOUBLE_PREFIX "")
+		endif()
+
+		if(LLVM_SUFFIX_VERSION_USE)
+			set(LLVM_TOOLS_VERSION_SUFFIX "-${llvm_Version}")
+		else()
+			set(LLVM_TOOLS_VERSION_SUFFIX "")
+		endif()
+
+		set(LIBGCC_ROOT "${AVR_GCC_ROOT}/lib/gcc/${double}")
+		# TODO: --gcc-toolchain
+
+		if(NOT DEFINED AVR_GCC_VERSION)
+			include("${CMAKE_CURRENT_LIST_DIR}/Arduino/System/DetectLibgccVersion.cmake")
+			detect_libgcc_version(AVR_GCC_VERSION LIBGCC_VER_FLAVOUR_ROOT "${LIBGCC_ROOT}")
+		endif()
+
+		if(NOT DEFINED LIBGCC_VER_FLAVOUR_ROOT)
+			set(LIBGCC_VER_FLAVOUR_ROOT "${LIBGCC_ROOT}/${AVR_GCC_VERSION}")
+		endif()
+
+		if(GCC_SUFFIX_VERSION_USE)
+			set(GCC_TOOLS_VERSION_SUFFIX "-${AVR_GCC_VERSION}")
+		else()
+			set(GCC_TOOLS_VERSION_SUFFIX "")
+		endif()
+
+		if(LLVM_ROOT)
+			set(CLANG_BIN "${LLVM_ROOT}/bin")
+			set(LLVM_BIN_OPTIONAL "${CLANG_BIN}/")
+			message(STATUS "CLang bin: ${CLANG_BIN}")
+		else()
+			set(LLVM_BIN_OPTIONAL "")
+		endif()
+
+		if(AVR_GCC_ROOT)
+			set(AVR_GCC_BIN "${AVR_GCC_ROOT}/bin")
+			message(STATUS "AVR GCC bin: ${AVR_GCC_BIN}")
+		endif()
+
+		if(GCC_COMPILERS_IN_USR_BIN)
+			#set(GCC_TOOLS_DIR_PREFIX "/usr/bin/")
+			set(GCC_TOOLS_DIR_PREFIX "")
+		else()
+			set(GCC_TOOLS_DIR_PREFIX "${AVR_GCC_BIN}/")
+		endif()
 	endif()
 
+	########## LLVM or gcc tools, migrate to appropriate place
+	if(REST_OF_TOOLCHAIN_IS_LLVM)
+		set(CMAKE_NM "${LLVM_BIN_OPTIONAL}llvm-nm${LLVM_TOOLS_VERSION_SUFFIX}${HOST_EXECUTABLE_SUFFIX}" CACHE FILEPATH "Path to nm")
+		set(CMAKE_READELF "${LLVM_BIN_OPTIONAL}llvm-readelf${LLVM_TOOLS_VERSION_SUFFIX}${HOST_EXECUTABLE_SUFFIX}" CACHE FILEPATH "Path to readelf")
+		set(CMAKE_OBJCOPY "${LLVM_BIN_OPTIONAL}llvm-objcopy${LLVM_TOOLS_VERSION_SUFFIX}${HOST_EXECUTABLE_SUFFIX}" CACHE FILEPATH "Path to objcopy")
+		set(CMAKE_STRIP "${LLVM_BIN_OPTIONAL}llvm-strip${LLVM_TOOLS_VERSION_SUFFIX}${HOST_EXECUTABLE_SUFFIX}" CACHE FILEPATH "Path to strip")
+	else()
+		set(CMAKE_NM "${AVR_GCC_BIN}/nm${HOST_EXECUTABLE_SUFFIX}" CACHE FILEPATH "Path to nm")
+		set(CMAKE_READELF "${AVR_GCC_BIN}/readelf${HOST_EXECUTABLE_SUFFIX}" CACHE FILEPATH "Path to readelf")
+		set(CMAKE_OBJCOPY "${AVR_GCC_BIN}/objcopy${HOST_EXECUTABLE_SUFFIX}" CACHE FILEPATH "Path to objcopy")
+		set(CMAKE_STRIP "${AVR_GCC_BIN}/strip${HOST_EXECUTABLE_SUFFIX}" CACHE FILEPATH "Path to strip")
+	endif()
+
+	message(STATUS "nm: ${CMAKE_NM}")
+	message(STATUS "readelf: ${CMAKE_READELF}")
+	message(STATUS "strip: ${CMAKE_STRIP}")
+	message(STATUS "linker: ${CMAKE_LINKER}")
+
+	if(REST_OF_TOOLCHAIN_IS_LLVM)
+		set(CMAKE_OBJDUMP "${LLVM_BIN_OPTIONAL}llvm-objdump${LLVM_TOOLS_VERSION_SUFFIX}${HOST_EXECUTABLE_SUFFIX}" CACHE FILEPATH "Path to objdump")
+	else()
+		# leave as it is
+	endif()
+	message(STATUS "objdump: ${CMAKE_OBJDUMP}")
+
+	if(REST_OF_TOOLCHAIN_IS_LLVM)
+		set(CMAKE_RANLIB "${LLVM_BIN_OPTIONAL}llvm-ranlib${LLVM_TOOLS_VERSION_SUFFIX}${HOST_EXECUTABLE_SUFFIX}" CACHE FILEPATH "Path to ranlib")
+	else()
+		# leave as it is
+	endif()
+	message(STATUS "ranlib: ${CMAKE_RANLIB}")
+
+	if(REST_OF_TOOLCHAIN_IS_LLVM)
+		set(CMAKE_LINKER "${LLVM_BIN_OPTIONAL}ld.lld${LLVM_TOOLS_VERSION_SUFFIX}${HOST_EXECUTABLE_SUFFIX}" CACHE FILEPATH "Path to linker")
+	else()
+		# leave as it is
+	endif()
+
+	message(STATUS "linker: ${CMAKE_LINKER}")
+	############
+
+	# CMAKE_C_COMPILER
+	message("ARDUINO_RULE_recipe.c.o.pattern:${ARDUINO_RULE_recipe.c.o.pattern}")
+	_resolve_build_rule_properties("recipe.c.o.pattern" _build_cmd
+		_build_string)
+	message(STATUS "CMAKE_C_COMPILER _build_cmd ${_build_cmd}")
+	message(STATUS "CMAKE_C_COMPILER _build_string ${_build_string}")
+
+	extractTargetFlagsFromGCCCLI(_parsed "${ARDUINO_RULE_recipe.c.o.pattern}")
+	message(STATUS "flags ${_parsed_flags}")
+	message(STATUS "defines ${_parsed_defines}")
+	list(APPEND DEFINES_TO_ADD ${_parsed_defines})
+
+	if(USE_CLANG_AS_COMPILER)
+		set(CMAKE_C_COMPILER "clang")
+		set(CMAKE_C_COMPILER "${LLVM_BIN_OPTIONAL}${CMAKE_C_COMPILER}${LLVM_TOOLS_VERSION_SUFFIX}${HOST_EXECUTABLE_SUFFIX}")
+		#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fembed-bitcode")
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  -fdebug-default-version=3")
+	else()
+		#set(CMAKE_C_COMPILER "${GCC_TOOLS_DIR_PREFIX}${GCC_TOOLS_DOUBLE_PREFIX}gcc${GCC_TOOLS_VERSION_SUFFIX}${HOST_EXECUTABLE_SUFFIX}")
+		set(CMAKE_C_COMPILER "${_build_cmd}")
+	endif()
+	#set(CMAKE_C_COMPILE_OBJECT "<CMAKE_C_COMPILER> ${_build_string}")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${_parsed_flags}")
+	#string_escape_quoting(CMAKE_C_COMPILER)
+	#string_escape_quoting(CMAKE_C_COMPILE_OBJECT)
+	#string_escape_quoting(CMAKE_C_FLAGS)
+	list(APPEND DEFINES_TO_ADD ${_parsed_defines})
+
+	# CMAKE_CXX_COMPILER
+
+	message("ARDUINO_RULE_recipe.cpp.o.pattern:${ARDUINO_RULE_recipe.cpp.o.pattern}")
+	_resolve_build_rule_properties("recipe.cpp.o.pattern" _build_cmd
+		_build_string)
+	message(STATUS "CMAKE_CXX_COMPILER _build_cmd ${_build_cmd}")
+	message(STATUS "CMAKE_CXX_COMPILER _build_string ${_build_string}")
+	extractTargetFlagsFromGCCCLI(_parsed "${ARDUINO_RULE_recipe.cpp.o.pattern}")
+	if(USE_CLANG_AS_COMPILER)
+		set(CMAKE_CXX_COMPILER "clang++")
+		set(CMAKE_CXX_COMPILER "${LLVM_BIN_OPTIONAL}${CMAKE_CXX_COMPILER}${LLVM_TOOLS_VERSION_SUFFIX}${HOST_EXECUTABLE_SUFFIX}")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
+	else()
+		#set(CMAKE_CXX_COMPILER "${GCC_TOOLS_DIR_PREFIX}${GCC_TOOLS_DOUBLE_PREFIX}g++${GCC_TOOLS_VERSION_SUFFIX}${HOST_EXECUTABLE_SUFFIX}")
+		set(CMAKE_CXX_COMPILER "${_build_cmd}")
+	endif()
+	#set(CMAKE_CXX_COMPILE_OBJECT "<CMAKE_CXX_COMPILER> ${_build_string}")
+	#set(CMAKE_CXX_FLAGS ${_build_string})
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${_parsed_flags}")
+	list(APPEND DEFINES_TO_ADD ${_parsed_defines})
+	#string_escape_quoting(CMAKE_CXX_COMPILER)
+	#string_escape_quoting(CMAKE_CXX_COMPILE_OBJECT)
+	#string_escape_quoting(CMAKE_CXX_FLAGS)
+
+	if (USE_CLANG_AS_COMPILER)
+		message(STATUS "Setting CLang as compiler")
+
+		if(CMAKE_HOST_WIN32)
+			set(LIBCLANG_VER_ROOT "${LIBGCC_ROOT}/lib/clang/${llvm_Version}.0.0")
+
+			list(APPEND TOOLCHAIN_GEN_DIRS_TO_LINK "${LIBGCC_ROOT}/lib")
+			list(APPEND TOOLCHAIN_GEN_DIRS_TO_LINK "${LIBGCC_VER_FLAVOUR_ROOT}")
+			#SET(CMAKE_FIND_ROOT_PATH "${CMAKE_SYSROOT}" "${LIBGCC_ROOT}" "${LIBGCC_VER_FLAVOUR_ROOT}" "${LIBCLANG_VER_ROOT}")
+		else()
+			list(APPEND TOOLCHAIN_GEN_SYS_DIRS_TO_INCLUDE "${LIBGCC_VER_FLAVOUR_ROOT}/include/c++")
+			list(APPEND TOOLCHAIN_GEN_SYS_DIRS_TO_INCLUDE "${LIBGCC_VER_FLAVOUR_ROOT}/include/c++/${double}")
+			list(APPEND TOOLCHAIN_GEN_SYS_DIRS_TO_INCLUDE "${LIBGCC_VER_FLAVOUR_ROOT}/include/c++/backward")
+			list(APPEND TOOLCHAIN_GEN_SYS_DIRS_TO_INCLUDE "${LIBGCC_VER_FLAVOUR_ROOT}/include-fixed")
+		endif()
+		#ToDo: ./hardware/tools/avr/avr/include/
+	else()
+		message(STATUS "Setting GCC as compiler")
+	endif()
+
+	# CMAKE_ASM_COMPILER
+	message("ARDUINO_RULE_recipe.S.o.pattern:${ARDUINO_RULE_recipe.S.o.pattern}")
+	_resolve_build_rule_properties("recipe.S.o.pattern" _build_cmd
+		_build_string)
+	message(STATUS "CMAKE_CXX_COMPILER _build_cmd ${_build_cmd}")
+	message(STATUS "CMAKE_CXX_COMPILER _build_string ${_build_string}")
+	extractTargetFlagsFromGCCCLI(_parsed "${ARDUINO_RULE_recipe.S.o.pattern}")
+	if(REST_OF_TOOLCHAIN_IS_LLVM)
+		set(CMAKE_ASM_COMPILER "${CMAKE_C_COMPILER}" CACHE FILEPATH "Path to the assembler")
+	else()
+		if (_build_cmd) # ASM pattern may not be there?
+			set(CMAKE_ASM_COMPILER "${_build_cmd}")
+			set(CMAKE_ASM_COMPILE_OBJECT "<CMAKE_ASM_COMPILER> ${_build_string}")
+			string_escape_quoting(CMAKE_ASM_COMPILER)
+			string_escape_quoting(CMAKE_ASM_COMPILE_OBJECT)
+		endif()
+	endif()
+	set(CMAKE_ASM_FLAGS ${CMAKE_ASM_FLAGS} ${_parsed_flags})
+
+	if(USE_CLANG_AS_COMPILER)
+		set(CMAKE_ASM_FLAGS "-I\${CMAKE_SYSROOT}/\${CLANG_TARGET_TRIPLE}/include ${CMAKE_ASM_FLAGS}")  # Somehow this dir is not added into include path by CLang automatically
+		set(CMAKE_ASM_FLAGS "--target=\${CLANG_TARGET_TRIPLE} ${CMAKE_ASM_FLAGS}")  # CMake should have added it itself, but it doesn't
+	endif()
+
+	list(APPEND DEFINES_TO_ADD ${_parsed_defines})
+
+	message(STATUS "asm: ${CMAKE_ASM_COMPILER}")
+	message(STATUS "asm obj: ${CMAKE_ASM_COMPILE_OBJECT}")
+
 	# CMAKE_C_LINK_EXECUTABLE
+	message("ARDUINO_RULE_recipe.c.combine.pattern:${ARDUINO_RULE_recipe.c.combine.pattern}")
 	_resolve_build_rule_properties("recipe.c.combine.pattern" _build_cmd
 		_build_string)
-	set(CMAKE_C_LINK_EXECUTABLE "<CMAKE_C_COMPILER> ${_build_string}")
-	string_escape_quoting(CMAKE_C_LINK_EXECUTABLE)
+	extractTargetFlagsFromGCCCLI(_parsed "${ARDUINO_RULE_recipe.c.combine.pattern}")
+	message(STATUS "CMAKE_C_LINK_EXECUTABLE _build_cmd ${_build_cmd}")
+	message(STATUS "CMAKE_C_LINK_EXECUTABLE _build_string ${_build_string}")
+
+	#set(CMAKE_C_LINK_EXECUTABLE "<CMAKE_C_COMPILER> ${_build_string}")
+	#string_escape_quoting(CMAKE_C_LINK_EXECUTABLE)
+	set(CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} ${_parsed_flags})
+	
+	message(STATUS "CMAKE_C_LINK_EXECUTABLE _build_string ${_build_string}")
 
 	# CMAKE_CXX_LINK_EXECUTABLE
-	set(CMAKE_CXX_LINK_EXECUTABLE "<CMAKE_CXX_COMPILER> ${_build_string}")
-	string_escape_quoting(CMAKE_CXX_LINK_EXECUTABLE)
+	#set(CMAKE_CXX_LINK_EXECUTABLE "<CMAKE_CXX_COMPILER> ${_build_string}")
+	#string_escape_quoting(CMAKE_CXX_LINK_EXECUTABLE)
+
+	string_escape_quoting(CMAKE_AR)
 
 	# CMAKE_C_CREATE_STATIC_LIBRARY
+	message(STATUS "Static linker flags from Arduino specs (recipe.ar.pattern) are ignored, nothing useful here!")
+	message(STATUS "ARDUINO_RULE_recipe.ar.pattern:${ARDUINO_RULE_recipe.ar.pattern}")
 	_resolve_build_rule_properties("recipe.ar.pattern" _build_cmd
 		_build_string)
-	set(CMAKE_AR "${_build_cmd}")
-	set(CMAKE_C_CREATE_STATIC_LIBRARY "<CMAKE_AR> ${_build_string}")
-	string_escape_quoting(CMAKE_AR)
-	string_escape_quoting(CMAKE_C_CREATE_STATIC_LIBRARY)
+	message(STATUS "CMAKE_C_CREATE_STATIC_LIBRARY _build_cmd ${_build_cmd}")
+	message(STATUS "CMAKE_C_CREATE_STATIC_LIBRARY _build_string ${_build_string}")
+
+	#set(CMAKE_C_CREATE_STATIC_LIBRARY "<CMAKE_AR> ${_build_string}")
+	#string_escape_quoting(CMAKE_C_CREATE_STATIC_LIBRARY)
+	#set(CMAKE_STATIC_LINKER_FLAGS ${CMAKE_STATIC_LINKER_FLAGS} ${_parsed_flags})
 
 	# CMAKE_CXX_CREATE_STATIC_LIBRARY
-	set(CMAKE_CXX_CREATE_STATIC_LIBRARY "<CMAKE_AR> ${_build_string}")
-	string_escape_quoting(CMAKE_CXX_CREATE_STATIC_LIBRARY)
+	#set(CMAKE_CXX_CREATE_STATIC_LIBRARY "<CMAKE_AR> ${_build_string}")
+	#string_escape_quoting(CMAKE_CXX_CREATE_STATIC_LIBRARY)
+
+
+	if(USE_CLANG_AS_COMPILER OR REST_OF_TOOLCHAIN_IS_LLVM)
+		set(CMAKE_C_COMPILER_TARGET ${triple})
+		set(CMAKE_CXX_COMPILER_TARGET ${triple})
+		set(CMAKE_CPP_COMPILER_TARGET ${triple})
+
+		set(CMAKE_C_FLAGS ${CMAKE_FLAGS} ${CMAKE_C_FLAGS})
+		set(CMAKE_CXX_FLAGS ${CMAKE_FLAGS} ${CMAKE_CXX_FLAGS})
+
+		if(USE_CLANG_AS_COMPILER)
+			#todo: CMAKE_<LANG>_FLAGS_INIT, CMAKE_*_LINKER_FLAGS_INIT, but they don't work. What is it?
+			if (llvm_Version VERSION_GREATER 11)
+				set(CMAKE_LINKER_FLAGS
+					"-v --ld-path=\"${CMAKE_LINKER}\" ${CMAKE_LINKER_FLAGS}"
+				)
+			else()
+				set(CMAKE_LINKER_FLAGS
+					"-v -fuse-ld=\"${CMAKE_LINKER}\" ${CMAKE_LINKER_FLAGS}"
+				)
+			endif()
+		endif()
+		if(NOT CMAKE_HOST_WIN32)
+			set(CMAKE_LINKER_FLAGS "-L${LIBGCC_VER_FLAVOUR_ROOT} ${CMAKE_LINKER_FLAGS}")
+		endif()
+
+		set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${CMAKE_LINKER_FLAGS}")
+		set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${CMAKE_LINKER_FLAGS}")
+
+		set(CMAKE_C_LINKER_FLAGS ${CMAKE_LINKER_FLAGS})
+		set(CMAKE_CXX_LINKER_FLAGS ${CMAKE_LINKER_FLAGS})
+		string_escape_quoting(CMAKE_LINKER_FLAGS)
+		string_escape_quoting(CMAKE_C_LINKER_FLAGS)
+		string_escape_quoting(CMAKE_CXX_LINKER_FLAGS)
+	endif()
+
+
+	if(REST_OF_TOOLCHAIN_IS_LLVM)
+		set(CMAKE_AR "${LLVM_BIN_OPTIONAL}llvm-ar${LLVM_TOOLS_VERSION_SUFFIX}${HOST_EXECUTABLE_SUFFIX}" CACHE FILEPATH "Path to ar")
+	else()
+		set(CMAKE_AR "${_build_cmd}")
+	endif()
+	message(STATUS "ar: ${CMAKE_AR}")
+
 
 	# properties_set_parent_scope(ard_global)
 
@@ -452,6 +718,18 @@ function (SetupBoardToolchain)
 	set("ARDUINO_ARCH_${CMAKE_SYSTEM_PROCESSOR}" TRUE)
 	SET("ARDUINO_${ARDUINO_BOARD}" TRUE)
 	string_escape_quoting(ARDUINO_BOARD_RUNTIME_PLATFORM_PATH)
+
+	string_escape_quoting(CMAKE_EXE_LINKER_FLAGS)
+
+	# removing flto: we set this up using cmake
+	foreach(vn CMAKE_ASM_FLAGS CMAKE_C_FLAGS CMAKE_CXX_FLAGS CMAKE_EXE_LINKER_FLAGS)
+		string(REPLACE "-flto" "" "${vn}" "${${vn}}")
+	endforeach()
+	if(USE_CLANG_AS_COMPILER OR REST_OF_TOOLCHAIN_IS_LLVM)
+		set(CMAKE_CROSSCOMPILING OFF)
+	else()
+		set(CMAKE_CROSSCOMPILING ON)
+	endif()
 
 	configure_file(
 		"${ARDUINO_TOOLCHAIN_DIR}/Arduino/Templates/ArduinoSystem.cmake.in"
